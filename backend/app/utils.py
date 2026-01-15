@@ -13,7 +13,8 @@ def ensure_dirs(*paths: Path) -> None:
 
 def save_upload(file: UploadFile, upload_dir: Path, thumb_dir: Path) -> Tuple[str, str]:
     ensure_dirs(upload_dir, thumb_dir)
-    filename = file.filename or "upload"
+    original_name = Path(file.filename or "").name
+    filename = original_name or "upload"
     target_path = upload_dir / filename
     counter = 1
     while target_path.exists():
