@@ -2,7 +2,7 @@
 
 BrewNotes is a self-hosted coffee and espresso logging app designed for fast daily use and deeper analytics over time. It helps you dial in your KitchenAid KF7 by tracking beans, drink settings, ratings, notes, photos, and attribution. BrewNotes is a single-container deployment that runs on Unraid or any Docker host.
 
-## Feature Overview
+## Feature Overview 
 
 - **Fast drink entry flow** optimized for mobile logging.
 - **Bean + drink presets** with auto-loaded settings.
