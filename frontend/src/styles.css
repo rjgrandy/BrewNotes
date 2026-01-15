@@ -1,0 +1,169 @@
+:root {
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+  --bg: #f4f2ee;
+  --bg-muted: #ffffff;
+  --text: #1b1b1b;
+  --text-muted: #5b5b5b;
+  --card: #ffffff;
+  --border: #e6e3dd;
+  --accent: #9c6b4f;
+  --accent-soft: #e8ddd2;
+}
+
+:root[data-theme='dark'] {
+  --bg: #1e1f21;
+  --bg-muted: #2a2c30;
+  --text: #f4f2ee;
+  --text-muted: #c4c2bd;
+  --card: #2a2c30;
+  --border: #3b3d42;
+  --accent: #d6a87a;
+  --accent-soft: #3a2e24;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.top-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px 12px;
+}
+
+.top-bar h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.top-bar p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+
+.toggles {
+  display: flex;
+  gap: 8px;
+}
+
+button {
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+
+.main-nav {
+  display: flex;
+  gap: 12px;
+  padding: 0 16px 16px;
+  overflow-x: auto;
+}
+
+.main-nav a {
+  text-decoration: none;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding-bottom: 4px;
+}
+
+.main-nav a.active {
+  color: var(--text);
+  border-bottom: 2px solid var(--accent);
+}
+
+main {
+  flex: 1;
+  padding: 0 16px 48px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.05);
+}
+
+.card h3 {
+  margin-top: 0;
+}
+
+.label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+input, select, textarea {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  background: var(--bg-muted);
+  color: var(--text);
+  width: 100%;
+}
+
+textarea {
+  min-height: 90px;
+}
+
+.badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+@media (min-width: 900px) {
+  .top-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .grid.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

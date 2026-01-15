@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<Container>
+  <Name>BrewNotes</Name>
+  <Repository>brewnotes:latest</Repository>
+  <Registry></Registry>
+  <Network>bridge</Network>
+  <Privileged>false</Privileged>
+  <Support></Support>
+  <Project>https://github.com/yourname/brewnotes</Project>
+  <Overview>BrewNotes is a self-hosted coffee and espresso logging app for fast daily use and analytics.</Overview>
+  <Description>Log beans, drink settings, ratings, notes, and photos for your KitchenAid KF7. Includes analytics, exports, and PWA support.</Description>
+  <WebUI>http://[IP]:[PORT:8087]</WebUI>
+  <Icon></Icon>
+  <TemplateURL></TemplateURL>
+  <Config Name="App Port" Target="8080" Default="8087" Mode="tcp" Description="Web UI port" Type="Port" Display="always" Required="true" Mask="false">8087</Config>
+  <Config Name="Data Directory" Target="/data" Default="/mnt/user/appdata/brewnotes" Mode="rw" Description="App data directory" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/brewnotes</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="rw" Description="User ID" Type="Variable" Display="always" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="rw" Description="Group ID" Type="Variable" Display="always" Required="false" Mask="false">100</Config>
+  <Config Name="APP_PORT" Target="APP_PORT" Default="8080" Mode="rw" Description="Internal app port" Type="Variable" Display="advanced" Required="true" Mask="false">8080</Config>
+  <Config Name="DATA_DIR" Target="DATA_DIR" Default="/data" Mode="rw" Description="Data dir" Type="Variable" Display="advanced" Required="true" Mask="false">/data</Config>
+  <Config Name="DB_PATH" Target="DB_PATH" Default="/data/app.db" Mode="rw" Description="Database path" Type="Variable" Display="advanced" Required="true" Mask="false">/data/app.db</Config>
+  <Config Name="UPLOAD_DIR" Target="UPLOAD_DIR" Default="/data/uploads" Mode="rw" Description="Uploads path" Type="Variable" Display="advanced" Required="true" Mask="false">/data/uploads</Config>
+</Container>

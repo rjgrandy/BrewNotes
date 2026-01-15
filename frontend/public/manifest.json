@@ -1,0 +1,15 @@
+{
+  "name": "BrewNotes",
+  "short_name": "BrewNotes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e1f21",
+  "theme_color": "#1e1f21",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
