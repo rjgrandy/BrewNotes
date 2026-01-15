@@ -6,7 +6,7 @@
   <Network>bridge</Network>
   <Privileged>false</Privileged>
   <Support></Support>
-  <Project>https://github.com/yourname/brewnotes</Project>
+  <Project>https://github.com/rjgrandy/brewnotes</Project>
   <Overview>BrewNotes is a self-hosted coffee and espresso logging app for fast daily use and analytics.</Overview>
   <Description>Log beans, drink settings, ratings, notes, and photos for your KitchenAid KF7. Includes analytics, exports, and PWA support.</Description>
   <WebUI>http://[IP]:[PORT:8087]</WebUI>
