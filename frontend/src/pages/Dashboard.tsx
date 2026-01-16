@@ -3,7 +3,9 @@ import { apiGet, apiSend } from '../utils/api';
 import { Bean, DrinkLog } from '../utils/types';
 import { DEFAULT_RATINGS, DEFAULT_SETTINGS, DRINK_TYPES } from '../utils/constants';
 import { formatVolume, ozToMl } from '../utils/units';
-import { addRecentName, getDefaultName, getRecentNames, setDefaultName } from '../utils/attribution';
+import { addRecentName, getDefaultName, getRecentNames } from '../utils/attribution';
+import SegmentedControl from '../components/SegmentedControl';
+import StarRating from '../components/StarRating';
 
 const defaultDrink = {
   custom_label: '',
@@ -20,9 +22,7 @@ export default function Dashboard({ unit }: Props) {
   const [beanId, setBeanId] = useState('');
   const [drinkType, setDrinkType] = useState(DRINK_TYPES[0]);
   const [form, setForm] = useState(defaultDrink);
-  const [defaultName, setDefaultNameState] = useState(getDefaultName());
   const [madeBy, setMadeBy] = useState(getDefaultName());
-  const [ratedBy, setRatedBy] = useState(getDefaultName());
   const [message, setMessage] = useState('');
   const recentNames = useMemo(() => getRecentNames(), []);
 
@@ -72,7 +72,7 @@ export default function Dashboard({ unit }: Props) {
       drink_type: drinkType,
       custom_label: form.custom_label,
       made_by: madeBy,
-      rated_by: ratedBy,
+      rated_by: madeBy,
       temperature_level: form.temperature_level,
       body_level: form.body_level,
       order: form.order,
@@ -93,7 +93,6 @@ export default function Dashboard({ unit }: Props) {
     const created = await apiSend<DrinkLog>('/api/drinks', 'POST', payload);
     setDrinks((prev) => [created, ...prev]);
     addRecentName(madeBy);
-    addRecentName(ratedBy);
     setMessage('Saved!');
     setTimeout(() => setMessage(''), 2000);
   };
@@ -125,11 +124,6 @@ export default function Dashboard({ unit }: Props) {
     setMessage('Saved as bean best.');
   };
 
-  const handleDefaultName = (value: string) => {
-    setDefaultNameState(value);
-    setDefaultName(value);
-  };
-
   return (
     <div className="grid two">
       <section className="card stack">
@@ -137,10 +131,6 @@ export default function Dashboard({ unit }: Props) {
           <h3>Fast Drink Entry</h3>
           <span className="badge">KF7 ready</span>
         </div>
-        <label className="stack">
-          <span className="label">Default Display Name</span>
-          <input value={defaultName} onChange={(event) => handleDefaultName(event.target.value)} />
-        </label>
         <label className="stack">
           <span className="label">Bean</span>
           <select value={beanId} onChange={(event) => setBeanId(event.target.value)}>
@@ -153,13 +143,20 @@ export default function Dashboard({ unit }: Props) {
         </label>
         <label className="stack">
           <span className="label">Drink Type</span>
-          <select value={drinkType} onChange={(event) => setDrinkType(event.target.value)}>
+          <div className="chip-row" role="tablist" aria-label="Drink Type">
             {DRINK_TYPES.map((type) => (
-              <option key={type} value={type}>
+              <button
+                key={type}
+                type="button"
+                role="tab"
+                aria-selected={drinkType === type}
+                className={drinkType === type ? 'chip active' : 'chip'}
+                onClick={() => setDrinkType(type)}
+              >
                 {type}
-              </option>
+              </button>
             ))}
-          </select>
+          </div>
         </label>
         <div className="inline">
           <button
@@ -179,44 +176,58 @@ export default function Dashboard({ unit }: Props) {
           </button>
         </div>
         <div className="grid two">
-          <label className="stack">
+          <div className="stack">
             <span className="label">Strength</span>
-            <select
+            <SegmentedControl
               value={form.strength_level}
-              onChange={(event) => setForm({ ...form, strength_level: event.target.value })}
-            >
-              <option value="LOW">Low</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="HIGH">High</option>
-              <option value="EXTRA">Extra</option>
-            </select>
-          </label>
-          <label className="stack">
+              ariaLabel="Strength level"
+              options={[
+                { value: 'LOW', label: 'Low' },
+                { value: 'MEDIUM', label: 'Medium' },
+                { value: 'HIGH', label: 'High' },
+                { value: 'EXTRA', label: 'Extra' }
+              ]}
+              onChange={(value) => setForm({ ...form, strength_level: value })}
+            />
+          </div>
+          <div className="stack">
             <span className="label">Temperature</span>
-            <select
+            <SegmentedControl
               value={form.temperature_level}
-              onChange={(event) => setForm({ ...form, temperature_level: event.target.value })}
-            >
-              <option value="LOW">Low</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="HIGH">High</option>
-            </select>
-          </label>
-          <label className="stack">
+              ariaLabel="Temperature level"
+              options={[
+                { value: 'LOW', label: 'Low' },
+                { value: 'MEDIUM', label: 'Medium' },
+                { value: 'HIGH', label: 'High' }
+              ]}
+              onChange={(value) => setForm({ ...form, temperature_level: value })}
+            />
+          </div>
+          <div className="stack">
             <span className="label">Body</span>
-            <select value={form.body_level} onChange={(event) => setForm({ ...form, body_level: event.target.value })}>
-              <option value="LIGHT">Light</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="BOLD">Bold</option>
-            </select>
-          </label>
-          <label className="stack">
+            <SegmentedControl
+              value={form.body_level}
+              ariaLabel="Body level"
+              options={[
+                { value: 'LIGHT', label: 'Light' },
+                { value: 'MEDIUM', label: 'Medium' },
+                { value: 'BOLD', label: 'Bold' }
+              ]}
+              onChange={(value) => setForm({ ...form, body_level: value })}
+            />
+          </div>
+          <div className="stack">
             <span className="label">Order</span>
-            <select value={form.order} onChange={(event) => setForm({ ...form, order: event.target.value })}>
-              <option value="COFFEE_FIRST">Coffee First</option>
-              <option value="MILK_FIRST">Milk First</option>
-            </select>
-          </label>
+            <SegmentedControl
+              value={form.order}
+              ariaLabel="Pour order"
+              options={[
+                { value: 'COFFEE_FIRST', label: 'Coffee First' },
+                { value: 'MILK_FIRST', label: 'Milk First' }
+              ]}
+              onChange={(value) => setForm({ ...form, order: value })}
+            />
+          </div>
           <label className="stack">
             <span className="label">Coffee Volume ({unit})</span>
             <input
@@ -235,74 +246,41 @@ export default function Dashboard({ unit }: Props) {
           </label>
           <label className="stack">
             <span className="label">Grind (1-7)</span>
-            <input
-              type="range"
-              min="1"
-              max="7"
-              value={form.grind_setting}
-              onChange={(event) => setForm({ ...form, grind_setting: Number(event.target.value) })}
-            />
+            <div className="range-field">
+              <input
+                type="range"
+                min="1"
+                max="7"
+                value={form.grind_setting}
+                onChange={(event) => setForm({ ...form, grind_setting: Number(event.target.value) })}
+              />
+              <span className="range-value">{form.grind_setting}</span>
+            </div>
           </label>
         </div>
         <div className="grid two">
           <label className="stack">
             <span className="label">Overall Rating</span>
-            <input
-              type="number"
-              min="1"
-              max="5"
-              value={form.overall_rating}
-              onChange={(event) => setForm({ ...form, overall_rating: Number(event.target.value) })}
-            />
+            <StarRating label="Overall Rating" value={form.overall_rating} onChange={(value) => setForm({ ...form, overall_rating: value })} />
           </label>
           <label className="stack">
-            <span className="label">Sweetness</span>
-            <input
-              type="number"
-              min="1"
-              max="5"
-              value={form.sweetness}
-              onChange={(event) => setForm({ ...form, sweetness: Number(event.target.value) })}
-            />
+            <span className="label">Taste</span>
+            <StarRating label="Taste" value={form.body_mouthfeel} onChange={(value) => setForm({ ...form, body_mouthfeel: value })} />
           </label>
           <label className="stack">
-            <span className="label">Bitterness</span>
-            <input
-              type="number"
-              min="1"
-              max="5"
-              value={form.bitterness}
-              onChange={(event) => setForm({ ...form, bitterness: Number(event.target.value) })}
-            />
-          </label>
-          <label className="stack">
-            <span className="label">Acidity</span>
-            <input
-              type="number"
-              min="1"
-              max="5"
-              value={form.acidity}
-              onChange={(event) => setForm({ ...form, acidity: Number(event.target.value) })}
-            />
-          </label>
-          <label className="stack">
-            <span className="label">Body / Mouthfeel</span>
-            <input
-              type="number"
-              min="1"
-              max="5"
-              value={form.body_mouthfeel}
-              onChange={(event) => setForm({ ...form, body_mouthfeel: Number(event.target.value) })}
-            />
-          </label>
-          <label className="stack">
-            <span className="label">Balance</span>
-            <input
-              type="number"
-              min="1"
-              max="5"
-              value={form.balance}
-              onChange={(event) => setForm({ ...form, balance: Number(event.target.value) })}
+            <span className="label">Sour · Balanced · Bitter</span>
+            <SegmentedControl
+              value={String(form.balance)}
+              ariaLabel="Sour to bitter balance"
+              className="balance-scale"
+              options={[
+                { value: '1', label: 'Sour' },
+                { value: '2', label: 'Leans Sour' },
+                { value: '3', label: 'Balanced' },
+                { value: '4', label: 'Leans Bitter' },
+                { value: '5', label: 'Bitter' }
+              ]}
+              onChange={(value) => setForm({ ...form, balance: Number(value) })}
             />
           </label>
         </div>
@@ -310,10 +288,6 @@ export default function Dashboard({ unit }: Props) {
           <label className="stack">
             <span className="label">Made By</span>
             <input list="names" value={madeBy} onChange={(event) => setMadeBy(event.target.value)} />
-          </label>
-          <label className="stack">
-            <span className="label">Rated By</span>
-            <input list="names" value={ratedBy} onChange={(event) => setRatedBy(event.target.value)} />
           </label>
           <datalist id="names">
             {recentNames.map((name) => (
