@@ -4,6 +4,8 @@ import { apiGet, apiSend, uploadFile } from '../utils/api';
 import { Bean, DrinkLog } from '../utils/types';
 import { DRINK_TYPES } from '../utils/constants';
 import { ozToMl } from '../utils/units';
+import SegmentedControl from '../components/SegmentedControl';
+import StarRating from '../components/StarRating';
 
 export default function DrinkDetail({ unit }: { unit: string }) {
   const { drinkId } = useParams();
@@ -78,32 +80,75 @@ export default function DrinkDetail({ unit }: { unit: string }) {
         </label>
         <label className="stack">
           <span className="label">Drink Type</span>
-          <select value={drink.drink_type} onChange={(event) => setDrink({ ...drink, drink_type: event.target.value })}>
+          <div className="chip-row" role="tablist" aria-label="Drink Type">
             {DRINK_TYPES.map((type) => (
-              <option key={type} value={type}>
+              <button
+                key={type}
+                type="button"
+                role="tab"
+                aria-selected={drink.drink_type === type}
+                className={drink.drink_type === type ? 'chip active' : 'chip'}
+                onClick={() => setDrink({ ...drink, drink_type: type })}
+              >
                 {type}
-              </option>
+              </button>
             ))}
-          </select>
+          </div>
         </label>
       </div>
       <div className="grid two">
-        <label className="stack">
+        <div className="stack">
           <span className="label">Strength</span>
-          <input value={drink.strength_level} onChange={(event) => setDrink({ ...drink, strength_level: event.target.value })} />
-        </label>
-        <label className="stack">
+          <SegmentedControl
+            value={drink.strength_level}
+            ariaLabel="Strength level"
+            options={[
+              { value: 'LOW', label: 'Low' },
+              { value: 'MEDIUM', label: 'Medium' },
+              { value: 'HIGH', label: 'High' },
+              { value: 'EXTRA', label: 'Extra' }
+            ]}
+            onChange={(value) => setDrink({ ...drink, strength_level: value })}
+          />
+        </div>
+        <div className="stack">
           <span className="label">Temperature</span>
-          <input value={drink.temperature_level} onChange={(event) => setDrink({ ...drink, temperature_level: event.target.value })} />
-        </label>
-        <label className="stack">
+          <SegmentedControl
+            value={drink.temperature_level}
+            ariaLabel="Temperature level"
+            options={[
+              { value: 'LOW', label: 'Low' },
+              { value: 'MEDIUM', label: 'Medium' },
+              { value: 'HIGH', label: 'High' }
+            ]}
+            onChange={(value) => setDrink({ ...drink, temperature_level: value })}
+          />
+        </div>
+        <div className="stack">
           <span className="label">Body</span>
-          <input value={drink.body_level} onChange={(event) => setDrink({ ...drink, body_level: event.target.value })} />
-        </label>
-        <label className="stack">
+          <SegmentedControl
+            value={drink.body_level}
+            ariaLabel="Body level"
+            options={[
+              { value: 'LIGHT', label: 'Light' },
+              { value: 'MEDIUM', label: 'Medium' },
+              { value: 'BOLD', label: 'Bold' }
+            ]}
+            onChange={(value) => setDrink({ ...drink, body_level: value })}
+          />
+        </div>
+        <div className="stack">
           <span className="label">Order</span>
-          <input value={drink.order} onChange={(event) => setDrink({ ...drink, order: event.target.value })} />
-        </label>
+          <SegmentedControl
+            value={drink.order}
+            ariaLabel="Pour order"
+            options={[
+              { value: 'COFFEE_FIRST', label: 'Coffee First' },
+              { value: 'MILK_FIRST', label: 'Milk First' }
+            ]}
+            onChange={(value) => setDrink({ ...drink, order: value })}
+          />
+        </div>
         <label className="stack">
           <span className="label">Coffee Volume ({unit})</span>
           <input
@@ -121,75 +166,50 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           />
         </label>
         <label className="stack">
-          <span className="label">Grind Setting</span>
-          <input
-            type="number"
-            min="1"
-            max="7"
-            value={drink.grind_setting}
-            onChange={(event) => setDrink({ ...drink, grind_setting: Number(event.target.value) })}
-          />
+          <span className="label">Grind (1-7)</span>
+          <div className="range-field">
+            <input
+              type="range"
+              min="1"
+              max="7"
+              value={drink.grind_setting}
+              onChange={(event) => setDrink({ ...drink, grind_setting: Number(event.target.value) })}
+            />
+            <span className="range-value">{drink.grind_setting}</span>
+          </div>
         </label>
       </div>
       <div className="grid two">
         <label className="stack">
           <span className="label">Overall Rating</span>
-          <input
-            type="number"
-            min="1"
-            max="5"
+          <StarRating
+            label="Overall Rating"
             value={drink.overall_rating}
-            onChange={(event) => setDrink({ ...drink, overall_rating: Number(event.target.value) })}
+            onChange={(value) => setDrink({ ...drink, overall_rating: value })}
           />
         </label>
         <label className="stack">
-          <span className="label">Sweetness</span>
-          <input
-            type="number"
-            min="1"
-            max="5"
-            value={drink.sweetness}
-            onChange={(event) => setDrink({ ...drink, sweetness: Number(event.target.value) })}
-          />
-        </label>
-        <label className="stack">
-          <span className="label">Bitterness</span>
-          <input
-            type="number"
-            min="1"
-            max="5"
-            value={drink.bitterness}
-            onChange={(event) => setDrink({ ...drink, bitterness: Number(event.target.value) })}
-          />
-        </label>
-        <label className="stack">
-          <span className="label">Acidity</span>
-          <input
-            type="number"
-            min="1"
-            max="5"
-            value={drink.acidity}
-            onChange={(event) => setDrink({ ...drink, acidity: Number(event.target.value) })}
-          />
-        </label>
-        <label className="stack">
-          <span className="label">Body / Mouthfeel</span>
-          <input
-            type="number"
-            min="1"
-            max="5"
+          <span className="label">Taste</span>
+          <StarRating
+            label="Taste"
             value={drink.body_mouthfeel}
-            onChange={(event) => setDrink({ ...drink, body_mouthfeel: Number(event.target.value) })}
+            onChange={(value) => setDrink({ ...drink, body_mouthfeel: value })}
           />
         </label>
         <label className="stack">
-          <span className="label">Balance</span>
-          <input
-            type="number"
-            min="1"
-            max="5"
-            value={drink.balance}
-            onChange={(event) => setDrink({ ...drink, balance: Number(event.target.value) })}
+          <span className="label">Sour · Balanced · Bitter</span>
+          <SegmentedControl
+            value={String(drink.balance)}
+            ariaLabel="Sour to bitter balance"
+            className="balance-scale"
+            options={[
+              { value: '1', label: 'Sour' },
+              { value: '2', label: 'Leans Sour' },
+              { value: '3', label: 'Balanced' },
+              { value: '4', label: 'Leans Bitter' },
+              { value: '5', label: 'Bitter' }
+            ]}
+            onChange={(value) => setDrink({ ...drink, balance: Number(value) })}
           />
         </label>
       </div>
@@ -197,10 +217,6 @@ export default function DrinkDetail({ unit }: { unit: string }) {
         <label className="stack">
           <span className="label">Made By</span>
           <input value={drink.made_by || ''} onChange={(event) => setDrink({ ...drink, made_by: event.target.value })} />
-        </label>
-        <label className="stack">
-          <span className="label">Rated By</span>
-          <input value={drink.rated_by || ''} onChange={(event) => setDrink({ ...drink, rated_by: event.target.value })} />
         </label>
         <label className="stack">
           <span className="label">Notes</span>

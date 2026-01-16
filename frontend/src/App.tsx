@@ -12,7 +12,7 @@ const getStored = (key: string, fallback: string) =>
 
 export default function App() {
   const [theme, setTheme] = useState(getStored('theme', 'light'));
-  const [unit, setUnit] = useState(getStored('unit', 'ml'));
+  const [unit, setUnit] = useState(getStored('unit', 'oz'));
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -39,11 +39,21 @@ export default function App() {
           </button>
         </div>
       </header>
-      <nav className="main-nav">
-        <NavLink to="/">Dashboard</NavLink>
-        <NavLink to="/beans">Beans</NavLink>
-        <NavLink to="/drinks">Drinks</NavLink>
-        <NavLink to="/analytics">Analytics</NavLink>
+      <nav className="main-nav" aria-label="Primary">
+        <div className="segmented-control nav-segments">
+          <NavLink to="/" className={({ isActive }) => (isActive ? 'segmented-item active' : 'segmented-item')}>
+            Dashboard
+          </NavLink>
+          <NavLink to="/beans" className={({ isActive }) => (isActive ? 'segmented-item active' : 'segmented-item')}>
+            Beans
+          </NavLink>
+          <NavLink to="/drinks" className={({ isActive }) => (isActive ? 'segmented-item active' : 'segmented-item')}>
+            Drinks
+          </NavLink>
+          <NavLink to="/analytics" className={({ isActive }) => (isActive ? 'segmented-item active' : 'segmented-item')}>
+            Analytics
+          </NavLink>
+        </div>
       </nav>
       <main>
         <Routes>
