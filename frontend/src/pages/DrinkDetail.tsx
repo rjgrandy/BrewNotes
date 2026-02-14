@@ -12,6 +12,8 @@ export default function DrinkDetail({ unit }: { unit: string }) {
   const navigate = useNavigate();
   const [drink, setDrink] = useState<DrinkLog | null>(null);
   const [beans, setBeans] = useState<Bean[]>([]);
+  const [coffeeVolumeInput, setCoffeeVolumeInput] = useState('');
+  const [milkVolumeInput, setMilkVolumeInput] = useState('');
 
   useEffect(() => {
     if (!drinkId) return;
@@ -23,6 +25,14 @@ export default function DrinkDetail({ unit }: { unit: string }) {
     };
     load();
   }, [drinkId]);
+
+  useEffect(() => {
+    if (!drink) return;
+    const formatVolumeInput = (volumeMl: number) =>
+      unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl);
+    setCoffeeVolumeInput(formatVolumeInput(drink.coffee_volume_ml));
+    setMilkVolumeInput(formatVolumeInput(drink.milk_volume_ml));
+  }, [drink?.coffee_volume_ml, drink?.milk_volume_ml, unit]);
 
   const handleUpdate = async () => {
     if (!drink || !drinkId) return;
@@ -45,10 +55,38 @@ export default function DrinkDetail({ unit }: { unit: string }) {
 
   const updateVolume = (field: 'coffee_volume_ml' | 'milk_volume_ml', value: string) => {
     if (!drink) return;
-    const num = Number(value) || 0;
+
+    if (field === 'coffee_volume_ml') {
+      setCoffeeVolumeInput(value);
+    } else {
+      setMilkVolumeInput(value);
+    }
+
+    if (value.trim() === '') {
+      return;
+    }
+
+    const num = Number(value);
+    if (Number.isNaN(num)) {
+      return;
+    }
+
     setDrink({
       ...drink,
       [field]: unit === 'oz' ? ozToMl(num) : num
+    });
+  };
+
+  const normalizeVolumeOnBlur = (field: 'coffee_volume_ml' | 'milk_volume_ml') => {
+    if (!drink) return;
+    const value = field === 'coffee_volume_ml' ? coffeeVolumeInput : milkVolumeInput;
+    if (value.trim() !== '') {
+      return;
+    }
+
+    setDrink({
+      ...drink,
+      [field]: 0
     });
   };
 
@@ -153,16 +191,18 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           <span className="label">Coffee Volume ({unit})</span>
           <input
             type="number"
-            value={unit === 'oz' ? (drink.coffee_volume_ml / 29.5735).toFixed(1) : drink.coffee_volume_ml}
+            value={coffeeVolumeInput}
             onChange={(event) => updateVolume('coffee_volume_ml', event.target.value)}
+            onBlur={() => normalizeVolumeOnBlur('coffee_volume_ml')}
           />
         </label>
         <label className="stack">
           <span className="label">Milk Volume ({unit})</span>
           <input
             type="number"
-            value={unit === 'oz' ? (drink.milk_volume_ml / 29.5735).toFixed(1) : drink.milk_volume_ml}
+            value={milkVolumeInput}
             onChange={(event) => updateVolume('milk_volume_ml', event.target.value)}
+            onBlur={() => normalizeVolumeOnBlur('milk_volume_ml')}
           />
         </label>
         <label className="stack">
