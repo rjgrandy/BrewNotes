@@ -219,8 +219,7 @@ export default function Dashboard({ unit }: Props) {
               options={[
                 { value: 'LOW', label: 'Low' },
                 { value: 'MEDIUM', label: 'Medium' },
-                { value: 'HIGH', label: 'High' },
-                { value: 'EXTRA', label: 'Extra' }
+                { value: 'HIGH', label: 'High' }
               ]}
               onChange={(value) => setForm({ ...form, strength_level: value })}
             />
@@ -299,10 +298,6 @@ export default function Dashboard({ unit }: Props) {
           <label className="stack">
             <span className="label">Overall Rating</span>
             <StarRating label="Overall Rating" value={form.overall_rating} onChange={(value) => setForm({ ...form, overall_rating: value })} />
-          </label>
-          <label className="stack">
-            <span className="label">Taste</span>
-            <StarRating label="Taste" value={form.body_mouthfeel} onChange={(value) => setForm({ ...form, body_mouthfeel: value })} />
           </label>
           <label className="stack">
             <span className="label">Sour · Balanced · Bitter</span>
