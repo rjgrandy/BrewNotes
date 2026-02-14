@@ -2,6 +2,7 @@ export const DRINK_TYPES = [
   'Espresso',
   'Americano',
   'Coffee',
+  'Cortado',
   'Cappuccino',
   'Latte',
   'Flat White',

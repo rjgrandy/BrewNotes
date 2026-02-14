@@ -143,8 +143,7 @@ export default function DrinkDetail({ unit }: { unit: string }) {
             options={[
               { value: 'LOW', label: 'Low' },
               { value: 'MEDIUM', label: 'Medium' },
-              { value: 'HIGH', label: 'High' },
-              { value: 'EXTRA', label: 'Extra' }
+              { value: 'HIGH', label: 'High' }
             ]}
             onChange={(value) => setDrink({ ...drink, strength_level: value })}
           />
@@ -226,14 +225,6 @@ export default function DrinkDetail({ unit }: { unit: string }) {
             label="Overall Rating"
             value={drink.overall_rating}
             onChange={(value) => setDrink({ ...drink, overall_rating: value })}
-          />
-        </label>
-        <label className="stack">
-          <span className="label">Taste</span>
-          <StarRating
-            label="Taste"
-            value={drink.body_mouthfeel}
-            onChange={(value) => setDrink({ ...drink, body_mouthfeel: value })}
           />
         </label>
         <label className="stack">

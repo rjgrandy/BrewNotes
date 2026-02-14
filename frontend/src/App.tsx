@@ -26,17 +26,21 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="top-bar">
-        <div>
-          <h1>BrewNotes</h1>
-          <p>Fast dial-in logging for your KitchenAid KF7.</p>
-        </div>
-        <div className="toggles">
-          <button onClick={() => setUnit(unit === 'ml' ? 'oz' : 'ml')}>
-            {unit.toUpperCase()}
-          </button>
-          <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-            {theme === 'light' ? 'Dark' : 'Light'}
-          </button>
+        <div className="top-bar-glow" aria-hidden="true" />
+        <div className="top-bar-content">
+          <div>
+            <span className="kicker">Crafted Coffee Journal</span>
+            <h1>BrewNotes</h1>
+            <p>Fast dial-in logging for your KitchenAid KF7.</p>
+          </div>
+          <div className="toggles">
+            <button onClick={() => setUnit(unit === 'ml' ? 'oz' : 'ml')}>
+              {unit.toUpperCase()}
+            </button>
+            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+              {theme === 'light' ? 'Dark' : 'Light'}
+            </button>
+          </div>
         </div>
       </header>
       <nav className="main-nav" aria-label="Primary">
