@@ -22,6 +22,8 @@ export default function Dashboard({ unit }: Props) {
   const [beanId, setBeanId] = useState('');
   const [drinkType, setDrinkType] = useState(DRINK_TYPES[0]);
   const [form, setForm] = useState(defaultDrink);
+  const [coffeeVolumeInput, setCoffeeVolumeInput] = useState('');
+  const [milkVolumeInput, setMilkVolumeInput] = useState('');
   const [madeBy, setMadeBy] = useState(getDefaultName());
   const [message, setMessage] = useState('');
   const recentNames = useMemo(() => getRecentNames(), []);
@@ -38,6 +40,13 @@ export default function Dashboard({ unit }: Props) {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    const formatVolumeInput = (volumeMl: number) =>
+      unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl);
+    setCoffeeVolumeInput(formatVolumeInput(form.coffee_volume_ml));
+    setMilkVolumeInput(formatVolumeInput(form.milk_volume_ml));
+  }, [form.coffee_volume_ml, form.milk_volume_ml, unit]);
 
   const lastDrink = useMemo(() => {
     return drinks.find((drink) => drink.bean_id === beanId && drink.drink_type === drinkType);
@@ -98,10 +107,36 @@ export default function Dashboard({ unit }: Props) {
   };
 
   const updateVolume = (field: 'coffee_volume_ml' | 'milk_volume_ml', value: string) => {
-    const num = Number(value) || 0;
+    if (field === 'coffee_volume_ml') {
+      setCoffeeVolumeInput(value);
+    } else {
+      setMilkVolumeInput(value);
+    }
+
+    if (value.trim() === '') {
+      return;
+    }
+
+    const num = Number(value);
+    if (Number.isNaN(num)) {
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
       [field]: unit === 'oz' ? ozToMl(num) : num
+    }));
+  };
+
+  const normalizeVolumeOnBlur = (field: 'coffee_volume_ml' | 'milk_volume_ml') => {
+    const value = field === 'coffee_volume_ml' ? coffeeVolumeInput : milkVolumeInput;
+    if (value.trim() !== '') {
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      [field]: 0
     }));
   };
 
@@ -232,16 +267,18 @@ export default function Dashboard({ unit }: Props) {
             <span className="label">Coffee Volume ({unit})</span>
             <input
               type="number"
-              value={unit === 'oz' ? (form.coffee_volume_ml / 29.5735).toFixed(1) : form.coffee_volume_ml}
+              value={coffeeVolumeInput}
               onChange={(event) => updateVolume('coffee_volume_ml', event.target.value)}
+              onBlur={() => normalizeVolumeOnBlur('coffee_volume_ml')}
             />
           </label>
           <label className="stack">
             <span className="label">Milk Volume ({unit})</span>
             <input
               type="number"
-              value={unit === 'oz' ? (form.milk_volume_ml / 29.5735).toFixed(1) : form.milk_volume_ml}
+              value={milkVolumeInput}
               onChange={(event) => updateVolume('milk_volume_ml', event.target.value)}
+              onBlur={() => normalizeVolumeOnBlur('milk_volume_ml')}
             />
           </label>
           <label className="stack">
