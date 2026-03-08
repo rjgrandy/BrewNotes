@@ -27,6 +27,7 @@ export default function App() {
     <div className="app-shell">
       <header className="top-bar">
         <div className="top-bar-glow" aria-hidden="true" />
+        <div className="top-bar-beans" aria-hidden="true" />
         <div className="top-bar-content">
           <div>
             <span className="kicker">Crafted Coffee Journal</span>

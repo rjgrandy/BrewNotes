@@ -26,7 +26,17 @@ export default function Dashboard({ unit }: Props) {
   const [milkVolumeInput, setMilkVolumeInput] = useState('');
   const [madeBy, setMadeBy] = useState(getDefaultName());
   const [message, setMessage] = useState('');
+  const [selectedDrink, setSelectedDrink] = useState<DrinkLog | null>(null);
   const recentNames = useMemo(() => getRecentNames(), []);
+  const beanById = useMemo(() => new Map(beans.map((bean) => [bean.id, bean])), [beans]);
+
+  const getBeanLabel = (bean: Bean) => {
+    if (bean.roaster) {
+      return `${bean.roaster} — ${bean.name}`;
+    }
+    return bean.name;
+  };
+
 
   useEffect(() => {
     const load = async () => {
@@ -171,7 +181,7 @@ export default function Dashboard({ unit }: Props) {
           <select value={beanId} onChange={(event) => setBeanId(event.target.value)}>
             {beans.map((bean) => (
               <option key={bean.id} value={bean.id}>
-                {bean.name}
+                {getBeanLabel(bean)}
               </option>
             ))}
           </select>
@@ -266,6 +276,8 @@ export default function Dashboard({ unit }: Props) {
             <span className="label">Coffee Volume ({unit})</span>
             <input
               type="number"
+              min="0"
+              step={unit === 'oz' ? '0.1' : '2.957'}
               value={coffeeVolumeInput}
               onChange={(event) => updateVolume('coffee_volume_ml', event.target.value)}
               onBlur={() => normalizeVolumeOnBlur('coffee_volume_ml')}
@@ -275,6 +287,8 @@ export default function Dashboard({ unit }: Props) {
             <span className="label">Milk Volume ({unit})</span>
             <input
               type="number"
+              min="0"
+              step={unit === 'oz' ? '0.1' : '2.957'}
               value={milkVolumeInput}
               onChange={(event) => updateVolume('milk_volume_ml', event.target.value)}
               onBlur={() => normalizeVolumeOnBlur('milk_volume_ml')}
@@ -341,7 +355,7 @@ export default function Dashboard({ unit }: Props) {
           <h3>Recent Drinks</h3>
           <div className="stack">
             {drinks.slice(0, 5).map((drink) => (
-              <div key={drink.id} className="inline" style={{ justifyContent: 'space-between' }}>
+              <button key={drink.id} type="button" className="recent-drink-item" onClick={() => setSelectedDrink(drink)}>
                 <div>
                   <div>{drink.drink_type}</div>
                   <div className="label">
@@ -349,7 +363,7 @@ export default function Dashboard({ unit }: Props) {
                   </div>
                 </div>
                 <span className="badge">{drink.overall_rating}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -371,6 +385,60 @@ export default function Dashboard({ unit }: Props) {
           </div>
         </div>
       </section>
+
+      {selectedDrink && (
+        <div className="modal-overlay" role="presentation" onClick={() => setSelectedDrink(null)}>
+          <div className="card stack modal-card" role="dialog" aria-modal="true" aria-label="Drink details" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 style={{ marginBottom: 4 }}>{selectedDrink.drink_type}</h3>
+                <div className="label">{beanById.get(selectedDrink.bean_id) ? getBeanLabel(beanById.get(selectedDrink.bean_id) as Bean) : 'Unknown bean'}</div>
+              </div>
+              <button type="button" onClick={() => setSelectedDrink(null)}>
+                Close
+              </button>
+            </div>
+            <div className="details-grid">
+              <div>
+                <div className="label">Coffee volume</div>
+                <div className="detail-value">{formatVolume(selectedDrink.coffee_volume_ml, unit)}</div>
+              </div>
+              <div>
+                <div className="label">Milk volume</div>
+                <div className="detail-value">{formatVolume(selectedDrink.milk_volume_ml, unit)}</div>
+              </div>
+              <div>
+                <div className="label">Strength</div>
+                <div className="detail-value">{selectedDrink.strength_level}</div>
+              </div>
+              <div>
+                <div className="label">Temperature</div>
+                <div className="detail-value">{selectedDrink.temperature_level}</div>
+              </div>
+              <div>
+                <div className="label">Body</div>
+                <div className="detail-value">{selectedDrink.body_level}</div>
+              </div>
+              <div>
+                <div className="label">Order</div>
+                <div className="detail-value">{selectedDrink.order.replace('_', ' ')}</div>
+              </div>
+              <div>
+                <div className="label">Grind</div>
+                <div className="detail-value">{selectedDrink.grind_setting}</div>
+              </div>
+              <div>
+                <div className="label">Rating</div>
+                <div className="detail-value">{selectedDrink.overall_rating}/5</div>
+              </div>
+            </div>
+            <div>
+              <div className="label">Notes</div>
+              <div>{selectedDrink.notes || 'No notes yet.'}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
