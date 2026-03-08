@@ -69,6 +69,19 @@ body {
   pointer-events: none;
 }
 
+.top-bar-beans {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.42;
+  background-image:
+    linear-gradient(120deg, rgba(18, 10, 6, 0.15), rgba(18, 10, 6, 0.5)),
+    url('/coffee-beans-header-photo.svg');
+  background-size: cover;
+  background-position: center;
+  filter: saturate(1.05) contrast(1.08);
+}
+
 .top-bar-content {
   position: relative;
   z-index: 1;
@@ -207,6 +220,10 @@ textarea {
   border-radius: 999px;
   text-align: center;
   text-decoration: none;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
@@ -234,6 +251,9 @@ button:hover {
   color: var(--text-muted);
   padding: 8px 14px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
   transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
@@ -310,6 +330,58 @@ button:hover {
 
 .grid > * {
   min-width: 0;
+}
+
+
+.recent-drink-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--bg-muted);
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.recent-drink-item .label {
+  margin-top: 4px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 15, 10, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 20;
+}
+
+.modal-card {
+  width: min(560px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.detail-value {
+  font-weight: 600;
 }
 
 @media (min-width: 900px) {
