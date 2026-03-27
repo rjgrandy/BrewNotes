@@ -314,17 +314,18 @@ export default function Dashboard({ unit }: Props) {
             <StarRating label="Overall Rating" value={form.overall_rating} onChange={(value) => setForm({ ...form, overall_rating: value })} />
           </label>
           <label className="stack">
-            <span className="label">Sour · Balanced · Bitter</span>
+            <span className="label balance-label">Sour · Balanced · Bitter</span>
             <SegmentedControl
               value={String(form.balance)}
               ariaLabel="Sour to bitter balance"
               className="balance-scale"
+              hideLabels
               options={[
-                { value: '1', label: 'Sour' },
-                { value: '2', label: 'Leans Sour' },
-                { value: '3', label: 'Balanced' },
-                { value: '4', label: 'Leans Bitter' },
-                { value: '5', label: 'Bitter' }
+                { value: '1', label: 'Sour', ariaLabel: 'Sour' },
+                { value: '2', label: 'Leans Sour', ariaLabel: 'Leans Sour' },
+                { value: '3', label: 'Balanced', ariaLabel: 'Balanced' },
+                { value: '4', label: 'Leans Bitter', ariaLabel: 'Leans Bitter' },
+                { value: '5', label: 'Bitter', ariaLabel: 'Bitter' }
               ]}
               onChange={(value) => setForm({ ...form, balance: Number(value) })}
             />

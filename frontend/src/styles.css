@@ -211,7 +211,7 @@ textarea {
 
 .segmented-item {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 56px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -250,10 +250,8 @@ button:hover {
   background: var(--bg-muted);
   color: var(--text-muted);
   padding: 8px 14px;
+  flex: 0 0 auto;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
   transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
@@ -317,7 +315,30 @@ button:hover {
 
 .balance-scale .segmented-item {
   font-size: 0.8rem;
-  padding: 8px 12px;
+  padding: 8px 10px;
+}
+
+.balance-label {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.balance-scale .segmented-item {
+  min-height: 42px;
+}
+
+.balance-scale .segmented-marker {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+}
+
+.balance-scale .segmented-item.active .segmented-marker {
+  background: #fff;
+  border-color: #fff;
 }
 
 .badge {
