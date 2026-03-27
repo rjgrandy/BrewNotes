@@ -3,6 +3,7 @@ import { ReactNode } from 'react';
 type Option = {
   value: string;
   label: ReactNode;
+  ariaLabel?: string;
 };
 
 type Props = {
@@ -11,9 +12,10 @@ type Props = {
   onChange: (value: string) => void;
   ariaLabel: string;
   className?: string;
+  hideLabels?: boolean;
 };
 
-export default function SegmentedControl({ value, options, onChange, ariaLabel, className }: Props) {
+export default function SegmentedControl({ value, options, onChange, ariaLabel, className, hideLabels = false }: Props) {
   return (
     <div className={`segmented-control${className ? ` ${className}` : ''}`} role="radiogroup" aria-label={ariaLabel}>
       {options.map((option) => (
@@ -22,10 +24,11 @@ export default function SegmentedControl({ value, options, onChange, ariaLabel, 
           type="button"
           role="radio"
           aria-checked={value === option.value}
+          aria-label={option.ariaLabel ?? (typeof option.label === 'string' ? option.label : undefined)}
           className={value === option.value ? 'segmented-item active' : 'segmented-item'}
           onClick={() => onChange(option.value)}
         >
-          {option.label}
+          {hideLabels ? <span className="segmented-marker" aria-hidden="true" /> : option.label}
         </button>
       ))}
     </div>
