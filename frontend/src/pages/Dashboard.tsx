@@ -29,6 +29,18 @@ export default function Dashboard({ unit }: Props) {
   const [selectedDrink, setSelectedDrink] = useState<DrinkLog | null>(null);
   const recentNames = useMemo(() => getRecentNames(), []);
   const beanById = useMemo(() => new Map(beans.map((bean) => [bean.id, bean])), [beans]);
+  const levelLabel: { strength: Record<string, string>; body: Record<string, string> } = {
+    strength: {
+      LOW: 'Low',
+      MEDIUM: 'Medium',
+      HIGH: 'Strong'
+    },
+    body: {
+      LIGHT: 'Low',
+      MEDIUM: 'Medium',
+      BOLD: 'Strong'
+    }
+  } as const;
 
   const getBeanLabel = (bean: Bean) => {
     if (bean.roaster) {
@@ -61,11 +73,6 @@ export default function Dashboard({ unit }: Props) {
   const lastDrink = useMemo(() => {
     return drinks.find((drink) => drink.bean_id === beanId && drink.drink_type === drinkType);
   }, [drinks, beanId, drinkType]);
-
-  const beanBest = useMemo(() => {
-    const bean = beans.find((item) => item.id === beanId);
-    return bean?.current_best_settings || null;
-  }, [beans, beanId]);
 
   const applySettings = (settings: Partial<typeof defaultDrink>) => {
     setForm((prev) => ({
@@ -150,24 +157,11 @@ export default function Dashboard({ unit }: Props) {
     }));
   };
 
-  const saveBeanBest = async () => {
-    const bean = beans.find((item) => item.id === beanId);
-    if (!bean) return;
-    const updated = await apiSend<Bean>(`/api/beans/${beanId}`, 'PUT', {
-      ...bean,
-      current_best_settings: {
-        temperature_level: form.temperature_level,
-        body_level: form.body_level,
-        order: form.order,
-        coffee_volume_ml: form.coffee_volume_ml,
-        milk_volume_ml: form.milk_volume_ml,
-        strength_level: form.strength_level,
-        grind_setting: form.grind_setting
-      }
-    });
-    setBeans((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-    setMessage('Saved as bean best.');
-  };
+  useEffect(() => {
+    if (lastDrink) {
+      applySettings(extractSettings(lastDrink));
+    }
+  }, [lastDrink]);
 
   return (
     <div className="grid two">
@@ -203,23 +197,7 @@ export default function Dashboard({ unit }: Props) {
             ))}
           </div>
         </label>
-        <div className="inline">
-          <button
-            onClick={() => lastDrink && applySettings(extractSettings(lastDrink))}
-            disabled={!lastDrink}
-          >
-            Clone last (bean + drink)
-          </button>
-          <button
-            onClick={() => beanBest && applySettings(beanBest as Partial<typeof defaultDrink>)}
-            disabled={!beanBest}
-          >
-            Use bean best
-          </button>
-          <button className="primary" onClick={saveBeanBest}>
-            Save as bean best
-          </button>
-        </div>
+        <div className="label">Last drink settings are copied automatically.</div>
         <div className="grid two">
           <div className="stack">
             <span className="label">Strength</span>
@@ -253,9 +231,9 @@ export default function Dashboard({ unit }: Props) {
               value={form.body_level}
               ariaLabel="Body level"
               options={[
-                { value: 'LIGHT', label: 'Light' },
+                { value: 'LIGHT', label: 'Low' },
                 { value: 'MEDIUM', label: 'Medium' },
-                { value: 'BOLD', label: 'Bold' }
+                { value: 'BOLD', label: 'Strong' }
               ]}
               onChange={(value) => setForm({ ...form, body_level: value })}
             />
@@ -314,7 +292,11 @@ export default function Dashboard({ unit }: Props) {
             <StarRating label="Overall Rating" value={form.overall_rating} onChange={(value) => setForm({ ...form, overall_rating: value })} />
           </label>
           <label className="stack">
-            <span className="label balance-label">Sour · Balanced · Bitter</span>
+            <span className="label balance-label">
+              <span>Sour</span>
+              <span>Balanced</span>
+              <span>Bitter</span>
+            </span>
             <SegmentedControl
               value={String(form.balance)}
               ariaLabel="Sour to bitter balance"
@@ -358,9 +340,12 @@ export default function Dashboard({ unit }: Props) {
             {drinks.slice(0, 5).map((drink) => (
               <button key={drink.id} type="button" className="recent-drink-item" onClick={() => setSelectedDrink(drink)}>
                 <div>
+                  <div>
+                    {beanById.get(drink.bean_id) ? getBeanLabel(beanById.get(drink.bean_id) as Bean) : 'Unknown bean'}
+                  </div>
                   <div>{drink.drink_type}</div>
                   <div className="label">
-                    {formatVolume(drink.coffee_volume_ml, unit)} · Grind {drink.grind_setting}
+                    {formatVolume(drink.coffee_volume_ml, unit)} · Strength {levelLabel.strength[drink.strength_level]}
                   </div>
                 </div>
                 <span className="badge">{drink.overall_rating}</span>
@@ -410,7 +395,7 @@ export default function Dashboard({ unit }: Props) {
               </div>
               <div>
                 <div className="label">Strength</div>
-                <div className="detail-value">{selectedDrink.strength_level}</div>
+                <div className="detail-value">{levelLabel.strength[selectedDrink.strength_level]}</div>
               </div>
               <div>
                 <div className="label">Temperature</div>
@@ -418,7 +403,7 @@ export default function Dashboard({ unit }: Props) {
               </div>
               <div>
                 <div className="label">Body</div>
-                <div className="detail-value">{selectedDrink.body_level}</div>
+                <div className="detail-value">{levelLabel.body[selectedDrink.body_level]}</div>
               </div>
               <div>
                 <div className="label">Order</div>

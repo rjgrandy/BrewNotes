@@ -142,7 +142,7 @@ button.primary {
   display: flex;
   justify-content: center;
   padding: 0 16px 16px;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .nav-segments {
@@ -215,30 +215,30 @@ a:focus-visible {
 
 .segmented-control {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 6px;
   background: var(--bg-muted);
   border: 1px solid var(--border);
   border-radius: 999px;
-  overflow-x: auto;
+  overflow: visible;
   box-shadow: var(--shadow-soft);
 }
 
 .segmented-item {
   flex: 1 1 auto;
-  min-width: 56px;
+  min-width: 0;
   border: none;
   background: transparent;
   color: var(--text-muted);
   font-weight: 500;
-  padding: 8px 14px;
+  padding: 8px 10px;
   border-radius: 999px;
   text-align: center;
   text-decoration: none;
   display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
   transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
@@ -254,9 +254,9 @@ button:hover {
 
 .chip-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+  overflow: visible;
 }
 
 .chip {
@@ -334,7 +334,9 @@ button:hover {
 }
 
 .balance-label {
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   width: 100%;
   text-align: center;
 }

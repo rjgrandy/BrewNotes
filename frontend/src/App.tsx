@@ -12,16 +12,12 @@ const getStored = (key: string, fallback: string) =>
 
 export default function App() {
   const [theme, setTheme] = useState(getStored('theme', 'light'));
-  const [unit, setUnit] = useState(getStored('unit', 'oz'));
+  const unit = 'oz';
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('theme', theme);
   }, [theme]);
-
-  useEffect(() => {
-    window.localStorage.setItem('unit', unit);
-  }, [unit]);
 
   return (
     <div className="app-shell">
@@ -35,9 +31,6 @@ export default function App() {
             <p>Fast dial-in logging for your KitchenAid KF7.</p>
           </div>
           <div className="toggles">
-            <button onClick={() => setUnit(unit === 'ml' ? 'oz' : 'ml')}>
-              {unit.toUpperCase()}
-            </button>
             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
               {theme === 'light' ? 'Dark' : 'Light'}
             </button>
