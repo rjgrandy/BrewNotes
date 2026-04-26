@@ -1,28 +1,84 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet } from '../utils/api';
-import { DrinkLog } from '../utils/types';
+import { Bean, DrinkLog } from '../utils/types';
 import { formatVolume } from '../utils/units';
 
 export default function Drinks({ unit }: { unit: string }) {
   const [drinks, setDrinks] = useState<DrinkLog[]>([]);
+  const [beans, setBeans] = useState<Bean[]>([]);
+  const [search, setSearch] = useState('');
+  const [rating, setRating] = useState('all');
+  const [drinkType, setDrinkType] = useState('all');
 
   useEffect(() => {
-    apiGet<DrinkLog[]>('/api/drinks').then(setDrinks);
+    Promise.all([apiGet<DrinkLog[]>('/api/drinks'), apiGet<Bean[]>('/api/beans?include_archived=true')]).then(
+      ([drinksRes, beansRes]) => {
+        setDrinks(drinksRes);
+        setBeans(beansRes);
+      }
+    );
   }, []);
+
+  const beanName = (beanId: string) => beans.find((bean) => bean.id === beanId)?.name || 'Unknown bean';
+  const uniqueTypes = Array.from(new Set(drinks.map((drink) => drink.drink_type)));
+  const filteredDrinks = drinks
+    .filter((drink) => (rating === 'all' ? true : drink.overall_rating >= Number(rating)))
+    .filter((drink) => (drinkType === 'all' ? true : drink.drink_type === drinkType))
+    .filter((drink) => {
+      if (!search.trim()) return true;
+      const query = search.toLowerCase();
+      return [drink.drink_type, drink.notes, beanName(drink.bean_id)].some((item) => (item || '').toLowerCase().includes(query));
+    })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   return (
     <section className="stack">
-      {drinks.map((drink) => (
+      <div className="card stack">
+        <h3 style={{ marginBottom: 0 }}>Review Drink History</h3>
+        <div className="grid three">
+          <label className="stack">
+            <span className="label">Search</span>
+            <input
+              placeholder="Bean, drink type, or notes"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <label className="stack">
+            <span className="label">Minimum Rating</span>
+            <select value={rating} onChange={(event) => setRating(event.target.value)}>
+              <option value="all">All Ratings</option>
+              <option value="4">4+ stars</option>
+              <option value="3">3+ stars</option>
+            </select>
+          </label>
+          <label className="stack">
+            <span className="label">Drink Type</span>
+            <select value={drinkType} onChange={(event) => setDrinkType(event.target.value)}>
+              <option value="all">All Types</option>
+              {uniqueTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+      {filteredDrinks.map((drink) => (
         <div key={drink.id} className="card">
           <div className="inline" style={{ justifyContent: 'space-between' }}>
             <div>
               <h3>{drink.drink_type}</h3>
               <p className="label">
+                {beanName(drink.bean_id)} · {new Date(drink.created_at).toLocaleDateString()}
+              </p>
+              <p className="label">
                 {formatVolume(drink.coffee_volume_ml, unit)} · {drink.temperature_level} · Grind {drink.grind_setting}
               </p>
             </div>
-            <span className="badge">{drink.overall_rating}</span>
+            <span className="badge">{drink.overall_rating}/5</span>
           </div>
           <p>{drink.notes || 'No notes yet.'}</p>
           <Link to={`/drinks/${drink.id}`}>View / Edit</Link>

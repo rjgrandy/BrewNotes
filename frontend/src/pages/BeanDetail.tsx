@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiGet, apiSend, uploadFile } from '../utils/api';
-import { Bean, BeanAnalytics, RecommendedSettings } from '../utils/types';
+import { Bean, BeanAnalytics, BeanBestSettings, RecommendedSettings } from '../utils/types';
+import { formatVolume, ozToMl } from '../utils/units';
 import {
   ScatterChart,
   Scatter,
@@ -39,6 +40,7 @@ export default function BeanDetail({ unit }: Props) {
   const [form, setForm] = useState<Partial<Bean>>(emptyBean);
   const [analytics, setAnalytics] = useState<BeanAnalytics | null>(null);
   const [recommended, setRecommended] = useState<RecommendedSettings | null>(null);
+  const [bestVolumeInput, setBestVolumeInput] = useState('');
 
   useEffect(() => {
     if (!beanId) return;
@@ -72,6 +74,13 @@ export default function BeanDetail({ unit }: Props) {
     const updated = await uploadFile<Bean>(`/api/beans/${beanId}/photo`, file);
     setBean(updated);
   };
+
+  const currentBest = (form.current_best_settings || {}) as BeanBestSettings;
+
+  useEffect(() => {
+    const volumeMl = Number(currentBest.coffee_volume_ml || 0);
+    setBestVolumeInput(unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl));
+  }, [currentBest.coffee_volume_ml, unit]);
 
   if (!bean) {
     return <div className="card">Loading...</div>;
@@ -113,6 +122,78 @@ export default function BeanDetail({ unit }: Props) {
             <textarea value={form.notes || ''} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           </label>
         </div>
+        <div className="card stack sub-card">
+          <h4 style={{ margin: 0 }}>Best Espresso Settings</h4>
+          <div className="grid two">
+            <label className="stack">
+              <span className="label">Grind (1-7)</span>
+              <input
+                type="number"
+                min="1"
+                max="7"
+                value={Number(currentBest.grind_setting || 0)}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    current_best_settings: { ...currentBest, grind_setting: Number(event.target.value) }
+                  })
+                }
+              />
+            </label>
+            <label className="stack">
+              <span className="label">Coffee Volume ({unit})</span>
+              <input
+                type="number"
+                min="0"
+                step={unit === 'oz' ? '0.1' : '1'}
+                value={bestVolumeInput}
+                onChange={(event) => {
+                  setBestVolumeInput(event.target.value);
+                  const next = Number(event.target.value || 0);
+                  setForm({
+                    ...form,
+                    current_best_settings: {
+                      ...currentBest,
+                      coffee_volume_ml: unit === 'oz' ? ozToMl(next) : next
+                    }
+                  });
+                }}
+              />
+            </label>
+            <label className="stack">
+              <span className="label">Strength</span>
+              <select
+                value={currentBest.strength_level || 'MEDIUM'}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    current_best_settings: { ...currentBest, strength_level: event.target.value }
+                  })
+                }
+              >
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+              </select>
+            </label>
+            <label className="stack">
+              <span className="label">Temperature</span>
+              <select
+                value={currentBest.temperature_level || 'MEDIUM'}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    current_best_settings: { ...currentBest, temperature_level: event.target.value }
+                  })
+                }
+              >
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+              </select>
+            </label>
+          </div>
+        </div>
         <label className="stack">
           <span className="label">Bean Photo</span>
           <input type="file" onChange={(event) => event.target.files?.[0] && handleUpload(event.target.files[0])} />
@@ -122,11 +203,19 @@ export default function BeanDetail({ unit }: Props) {
         <div className="card">
           <h3>Recommended Settings</h3>
           <p className="label">Considered drinks: {recommended?.total_considered ?? 0}</p>
-          <pre>{JSON.stringify(recommended?.recommended, null, 2)}</pre>
+          <p className="label">
+            Grind {String(recommended?.recommended?.grind_setting ?? '-')} ·{' '}
+            {formatVolume(Number(recommended?.recommended?.coffee_volume_ml || 0), unit)} ·{' '}
+            {String(recommended?.recommended?.temperature_level || '-')}
+          </p>
         </div>
         <div className="card">
           <h3>Highest Rated Brew</h3>
-          <pre>{JSON.stringify(recommended?.highest_rated, null, 2)}</pre>
+          <p className="label">
+            Grind {String(recommended?.highest_rated?.grind_setting ?? '-')} ·{' '}
+            {formatVolume(Number(recommended?.highest_rated?.coffee_volume_ml || 0), unit)} · Rating{' '}
+            {String(recommended?.highest_rated?.overall_rating ?? '-')}
+          </p>
         </div>
       </section>
       <section className="grid two">
