@@ -1,3 +1,13 @@
+export type BeanBestSettings = {
+  temperature_level?: string;
+  body_level?: string;
+  order?: string;
+  coffee_volume_ml?: number;
+  milk_volume_ml?: number;
+  strength_level?: string;
+  grind_setting?: number;
+};
+
 export type Bean = {
   id: string;
   name: string;
@@ -15,7 +25,7 @@ export type Bean = {
   image_path?: string | null;
   thumbnail_path?: string | null;
   archived: boolean;
-  current_best_settings?: Record<string, unknown> | null;
+  current_best_settings?: BeanBestSettings | null;
   created_at: string;
   updated_at: string;
 };
@@ -57,7 +67,7 @@ export type BeanAnalytics = {
 };
 
 export type RecommendedSettings = {
-  recommended?: Record<string, unknown> | null;
-  highest_rated?: Record<string, unknown> | null;
+  recommended?: (BeanBestSettings & { overall_rating?: number }) | null;
+  highest_rated?: (BeanBestSettings & { overall_rating?: number }) | null;
   total_considered: number;
 };

@@ -40,6 +40,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  font-size: 16px;
 }
 
 .app-shell {
@@ -123,8 +124,11 @@ button {
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--text);
-  padding: 8px 14px;
+  padding: 10px 16px;
   cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  min-height: 42px;
   transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
@@ -169,7 +173,7 @@ main {
 }
 
 .label {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
 }
 
@@ -188,14 +192,25 @@ main {
 input, select, textarea {
   border-radius: 10px;
   border: 1px solid var(--border);
-  padding: 8px 10px;
+  padding: 10px 12px;
   background: var(--bg-muted);
   color: var(--text);
   width: 100%;
+  min-height: 42px;
+  font-size: 1rem;
 }
 
 textarea {
   min-height: 90px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 75%, white);
+  outline-offset: 2px;
 }
 
 .segmented-control {
@@ -346,11 +361,39 @@ button:hover {
   color: var(--accent);
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .grid > * {
   min-width: 0;
+}
+
+.sub-card {
+  background: var(--bg-muted);
+  box-shadow: none;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.data-table th {
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 
@@ -418,5 +461,25 @@ button:hover {
 
   .grid.three {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .top-bar {
+    margin: 10px;
+    padding: 16px;
+  }
+
+  .top-bar h1 {
+    font-size: 1.7rem;
+  }
+
+  main {
+    padding: 0 10px 30px;
+  }
+
+  .card {
+    padding: 14px;
+    border-radius: 14px;
   }
 }
