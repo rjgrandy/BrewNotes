@@ -21,13 +21,18 @@ const NAV = [
 
 function Brand() {
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-white">
-        <Coffee size={18} />
+    <div className="flex items-center gap-3">
+      <span
+        className="grid h-10 w-10 place-items-center rounded-2xl text-white"
+        style={{ background: 'linear-gradient(135deg, var(--accent-strong), var(--gold))', boxShadow: 'var(--shadow-soft)' }}
+      >
+        <Coffee size={20} strokeWidth={2.2} />
       </span>
       <div className="leading-tight">
-        <div className="text-base font-bold tracking-tight">BrewNotes</div>
-        <div className="text-[0.7rem] text-muted">KF7 dial-in journal</div>
+        <div className="text-lg font-extrabold tracking-tight">
+          Brew<span className="text-accent">Notes</span>
+        </div>
+        <div className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">KF7 dial-in journal</div>
       </div>
     </div>
   );

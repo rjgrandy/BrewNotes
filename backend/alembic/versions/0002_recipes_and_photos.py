@@ -50,8 +50,14 @@ def upgrade() -> None:
         sa.text("SELECT id, current_best_settings, image_path, thumbnail_path FROM beans")
     ).fetchall()
     for bean_id, best_settings, image_path, thumbnail_path in beans:
-        if best_settings:
-            settings_text = best_settings if isinstance(best_settings, str) else json.dumps(best_settings)
+        settings_obj = best_settings
+        if isinstance(settings_obj, str):
+            try:
+                settings_obj = json.loads(settings_obj)
+            except (ValueError, TypeError):
+                settings_obj = None
+        if isinstance(settings_obj, dict) and settings_obj:
+            settings_text = json.dumps(settings_obj)
             bind.execute(
                 sa.text(
                     "INSERT INTO bean_recipes "

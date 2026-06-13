@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, Coffee } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { apiGet, apiSend } from '../utils/api';
 import { recipeForType } from '../utils/beanApi';
 import { Bean } from '../utils/types';
@@ -121,30 +121,34 @@ export default function Beans({ unit }: Props) {
                 to={`/beans/${bean.id}`}
                 className="card group flex flex-col overflow-hidden transition-transform hover:-translate-y-1"
               >
-                <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-muted">
-                  {cover ? (
+                {cover && (
+                  <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-muted">
                     <img
                       src={cover}
                       alt={bean.name}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
-                  ) : (
-                    <div className="grid h-full w-full place-items-center text-muted">
-                      <Coffee size={40} strokeWidth={1.4} />
+                    <div className="absolute right-2 top-2 flex gap-1.5">
+                      {bean.decaf && <span className="badge">Decaf</span>}
+                      {bean.archived && <span className="badge">Archived</span>}
                     </div>
-                  )}
-                  <div className="absolute right-2 top-2 flex gap-1.5">
-                    {bean.decaf && <span className="badge">Decaf</span>}
-                    {bean.archived && <span className="badge">Archived</span>}
                   </div>
-                </div>
+                )}
                 <div className="flex flex-1 flex-col gap-2 p-4">
-                  <div>
-                    <h3 className="font-bold leading-tight">{bean.name}</h3>
-                    <p className="text-xs text-muted">
-                      {[bean.roaster, bean.origin].filter(Boolean).join(' · ') || 'No roaster set'}
-                    </p>
-                    {bean.rating ? <StarsDisplay value={bean.rating} className="mt-1 inline-block" /> : null}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="font-bold leading-tight">{bean.name}</h3>
+                      <p className="text-xs text-muted">
+                        {[bean.roaster, bean.origin].filter(Boolean).join(' · ') || 'No roaster set'}
+                      </p>
+                      {bean.rating ? <StarsDisplay value={bean.rating} className="mt-1 inline-block" /> : null}
+                    </div>
+                    {!cover && (
+                      <div className="flex shrink-0 gap-1.5">
+                        {bean.decaf && <span className="badge">Decaf</span>}
+                        {bean.archived && <span className="badge">Archived</span>}
+                      </div>
+                    )}
                   </div>
                   {espresso && (
                     <p className="text-xs">

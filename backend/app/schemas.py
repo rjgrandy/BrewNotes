@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class BeanBase(BaseModel):
@@ -51,11 +51,17 @@ class BeanRecipeOut(BaseModel):
     id: str
     bean_id: str
     drink_type: str
-    settings: dict
+    settings: dict = {}
     source: str
     source_drink_id: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("settings", mode="before")
+    @classmethod
+    def _settings_never_null(cls, value: object) -> object:
+        # Legacy/backfilled rows may have a null settings blob; treat as empty.
+        return value or {}
 
     class Config:
         from_attributes = True
