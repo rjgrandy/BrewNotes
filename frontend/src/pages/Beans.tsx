@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Coffee } from 'lucide-react';
 import { apiGet, apiSend } from '../utils/api';
+import { recipeForType } from '../utils/beanApi';
 import { Bean } from '../utils/types';
 import { mediaUrl } from '../utils/media';
+import { recipeSummaryText } from '../components/RecipeSummary';
+import StarsDisplay from '../components/StarsDisplay';
 import { useToast } from '../components/ui/Toast';
 import { Dialog, DialogContent, DialogTitle, DialogClose } from '../components/ui/Dialog';
 import { Switch } from '../components/ui/Switch';
@@ -22,12 +25,14 @@ const emptyBean = {
 };
 
 type Props = { unit: string };
+type Sort = 'updated' | 'name' | 'rating';
 
-export default function Beans(_props: Props) {
+export default function Beans({ unit }: Props) {
   const [beans, setBeans] = useState<Bean[]>([]);
   const [form, setForm] = useState(emptyBean);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [sort, setSort] = useState<Sort>('updated');
   const [createOpen, setCreateOpen] = useState(false);
   const toast = useToast();
 
@@ -51,20 +56,23 @@ export default function Beans(_props: Props) {
     toast('Bean added', 'success');
   };
 
-  const filtered = useMemo(
-    () =>
-      beans
-        .filter((bean) => (showArchived ? true : !bean.archived))
-        .filter((bean) => {
-          if (!search.trim()) return true;
-          const query = search.toLowerCase();
-          return [bean.name, bean.roaster, bean.origin, bean.process, bean.tasting_notes, bean.notes]
-            .filter(Boolean)
-            .some((item) => item?.toLowerCase().includes(query));
-        })
-        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
-    [beans, search, showArchived]
-  );
+  const filtered = useMemo(() => {
+    const sorters: Record<Sort, (a: Bean, b: Bean) => number> = {
+      updated: (a, b) => b.updated_at.localeCompare(a.updated_at),
+      name: (a, b) => a.name.localeCompare(b.name),
+      rating: (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || b.updated_at.localeCompare(a.updated_at)
+    };
+    return beans
+      .filter((bean) => (showArchived ? true : !bean.archived))
+      .filter((bean) => {
+        if (!search.trim()) return true;
+        const query = search.toLowerCase();
+        return [bean.name, bean.roaster, bean.origin, bean.process, bean.tasting_notes, bean.notes]
+          .filter(Boolean)
+          .some((item) => item?.toLowerCase().includes(query));
+      })
+      .sort(sorters[sort]);
+  }, [beans, search, showArchived, sort]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -88,6 +96,11 @@ export default function Beans(_props: Props) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
+        <select className="input sm:w-44" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+          <option value="updated">Recently updated</option>
+          <option value="rating">Highest rated</option>
+          <option value="name">Name A–Z</option>
+        </select>
         <label className="flex items-center justify-between gap-3 sm:justify-start">
           <span className="text-sm font-semibold text-muted">Show archived</span>
           <Switch ariaLabel="Show archived beans" checked={showArchived} onCheckedChange={setShowArchived} />
@@ -101,6 +114,7 @@ export default function Beans(_props: Props) {
           {filtered.map((bean) => {
             const cover = mediaUrl(bean.thumbnail_path) || mediaUrl(bean.image_path);
             const recipes = bean.recipes ?? [];
+            const espresso = recipeForType(bean, 'Espresso');
             return (
               <Link
                 key={bean.id}
@@ -130,7 +144,14 @@ export default function Beans(_props: Props) {
                     <p className="text-xs text-muted">
                       {[bean.roaster, bean.origin].filter(Boolean).join(' · ') || 'No roaster set'}
                     </p>
+                    {bean.rating ? <StarsDisplay value={bean.rating} className="mt-1 inline-block" /> : null}
                   </div>
+                  {espresso && (
+                    <p className="text-xs">
+                      <span className="font-semibold text-accent">Espresso</span>{' '}
+                      <span className="text-muted">{recipeSummaryText(espresso, unit)}</span>
+                    </p>
+                  )}
                   {recipes.length > 0 ? (
                     <div className="mt-auto flex flex-wrap gap-1.5">
                       {recipes.slice(0, 3).map((recipe) => (

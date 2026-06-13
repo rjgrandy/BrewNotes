@@ -44,6 +44,7 @@ export type Bean = {
   bag_size_g?: number | null;
   price?: number | null;
   decaf: boolean;
+  rating?: number | null;
   notes?: string | null;
   image_path?: string | null;
   thumbnail_path?: string | null;

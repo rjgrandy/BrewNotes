@@ -33,6 +33,7 @@ class Bean(Base):
     bag_size_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     price: Mapped[float | None] = mapped_column(Float, nullable=True)
     decaf: Mapped[bool] = mapped_column(Boolean, default=False)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_path: Mapped[str | None] = mapped_column(String, nullable=True)
     thumbnail_path: Mapped[str | None] = mapped_column(String, nullable=True)

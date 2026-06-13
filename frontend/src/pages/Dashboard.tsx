@@ -9,6 +9,7 @@ import { addRecentName, getDefaultName, getRecentNames } from '../utils/attribut
 import ChipSelect from '../components/ChipSelect';
 import RecipeControls from '../components/RecipeControls';
 import RatingPanel from '../components/RatingPanel';
+import Hero from '../components/Hero';
 import { useToast } from '../components/ui/Toast';
 import { Dialog, DialogContent, DialogTitle, DialogClose } from '../components/ui/Dialog';
 
@@ -135,12 +136,28 @@ export default function Dashboard({ unit }: Props) {
 
   const topDrinks = drinks.filter((d) => d.overall_rating >= 4).slice(0, 5);
 
+  const greeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  })();
+  const avgRating = drinks.length
+    ? (drinks.reduce((sum, d) => sum + d.overall_rating, 0) / drinks.length).toFixed(1)
+    : '–';
+
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Log a drink</h1>
-        <p className="text-sm text-muted">Pick a bean and dial type — your saved recipe loads automatically.</p>
-      </div>
+      <Hero
+        kicker="Crafted coffee journal"
+        title={`${greeting}, time to brew`}
+        subtitle="Pick a bean and dial type — your saved recipe loads automatically."
+        stats={[
+          { label: 'Beans', value: String(beans.length) },
+          { label: 'Drinks', value: String(drinks.length) },
+          { label: 'Avg rating', value: avgRating }
+        ]}
+      />
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <section className="card flex flex-col gap-5 p-5">
