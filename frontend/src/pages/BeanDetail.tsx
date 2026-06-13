@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, ReactElement } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Upload, Star, Trash2, Wand2, ImagePlus } from 'lucide-react';
+import { ArrowLeft, Upload, Star, Trash2, Wand2 } from 'lucide-react';
 import {
   ScatterChart,
   Scatter,
@@ -117,6 +117,25 @@ export default function BeanDetail({ unit }: Props) {
     setBean((prev) => (prev ? { ...prev, rating: updated.rating } : updated));
   };
 
+  const headerInner = (
+    <div className="flex flex-wrap items-end justify-between gap-2">
+      <div>
+        <h1 className="text-2xl font-bold text-white drop-shadow">{bean.name}</h1>
+        <p className="text-sm text-white/85">
+          {[bean.roaster, bean.origin].filter(Boolean).join(' · ') || 'No roaster set'}
+        </p>
+        <div className="mt-1.5 flex items-center gap-2">
+          <StarRating label="Bean rating" size={22} value={bean.rating ?? 0} onChange={saveRating} />
+          <span className="text-xs text-white/70">Rate this bean</span>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        {bean.decaf && <span className="badge">Decaf</span>}
+        {bean.archived && <span className="badge">Archived</span>}
+      </div>
+    </div>
+  );
+
   const onUpload = async (file?: File) => {
     if (!file || !beanId) return;
     const updated = await uploadBeanPhoto(beanId, file);
@@ -181,35 +200,23 @@ export default function BeanDetail({ unit }: Props) {
         <ArrowLeft size={16} /> All beans
       </Link>
 
-      {/* Hero */}
+      {/* Header */}
       <section className="card overflow-hidden">
-        <div className="relative aspect-[21/9] w-full bg-surface-muted">
-          {cover ? (
+        {cover ? (
+          <div className="relative aspect-[21/9] w-full bg-surface-muted">
             <img src={cover} alt={bean.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="grid h-full w-full place-items-center text-muted">
-              <ImagePlus size={36} strokeWidth={1.4} />
-            </div>
-          )}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <h1 className="text-2xl font-bold text-white drop-shadow">{bean.name}</h1>
-                <p className="text-sm text-white/85">
-                  {[bean.roaster, bean.origin].filter(Boolean).join(' · ') || 'No roaster set'}
-                </p>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <StarRating label="Bean rating" size={22} value={bean.rating ?? 0} onChange={saveRating} />
-                  <span className="text-xs text-white/70">Rate this bean</span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {bean.decaf && <span className="badge">Decaf</span>}
-                {bean.archived && <span className="badge">Archived</span>}
-              </div>
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+              {headerInner}
             </div>
           </div>
-        </div>
+        ) : (
+          <div
+            className="p-5"
+            style={{ background: 'linear-gradient(135deg, var(--accent-strong), var(--accent) 65%, var(--gold))' }}
+          >
+            {headerInner}
+          </div>
+        )}
 
         {/* Photo strip */}
         <div className="flex items-center gap-2 overflow-x-auto p-3">
