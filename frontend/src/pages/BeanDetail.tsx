@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { apiGet, apiSend, uploadFile } from '../utils/api';
-import { Bean, BeanAnalytics, BeanBestSettings, RecommendedSettings } from '../utils/types';
-import { formatVolume, ozToMl } from '../utils/units';
+import { useEffect, useMemo, useState, ReactElement } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft, Upload, Star, Trash2, Wand2, ImagePlus } from 'lucide-react';
 import {
   ScatterChart,
   Scatter,
@@ -21,271 +19,437 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis
 } from 'recharts';
-
-const emptyBean: Partial<Bean> = {
-  name: '',
-  roaster: '',
-  origin: '',
-  process: '',
-  roast_level: '',
-  tasting_notes: '',
-  notes: ''
-};
+import { apiGet, apiSend } from '../utils/api';
+import { upsertRecipe, deleteRecipe, uploadBeanPhoto, deleteBeanPhoto, setBeanCover, recipeForType } from '../utils/beanApi';
+import { Bean, BeanAnalytics, RecipeSettings, RecommendedSettings } from '../utils/types';
+import { DEFAULT_SETTINGS, DRINK_TYPES } from '../utils/constants';
+import { formatVolume } from '../utils/units';
+import { mediaUrl } from '../utils/media';
+import ChipSelect from '../components/ChipSelect';
+import RecipeControls from '../components/RecipeControls';
+import { useToast } from '../components/ui/Toast';
+import { Dialog, DialogContent, DialogTitle, DialogClose } from '../components/ui/Dialog';
+import { Switch } from '../components/ui/Switch';
+import { cn } from '../components/ui/cn';
 
 type Props = { unit: string };
+type Tab = 'overview' | 'recipes' | 'analytics';
+
+const CHART_COLOR = 'var(--accent)';
+const CHART_COLOR_2 = 'var(--gold)';
 
 export default function BeanDetail({ unit }: Props) {
   const { beanId } = useParams();
   const [bean, setBean] = useState<Bean | null>(null);
-  const [form, setForm] = useState<Partial<Bean>>(emptyBean);
   const [analytics, setAnalytics] = useState<BeanAnalytics | null>(null);
+  const [tab, setTab] = useState<Tab>('overview');
+  const [meta, setMeta] = useState<Record<string, unknown>>({});
+  const [recipeType, setRecipeType] = useState(DRINK_TYPES[0]);
+  const [recipeDraft, setRecipeDraft] = useState<RecipeSettings>(DEFAULT_SETTINGS);
   const [recommended, setRecommended] = useState<RecommendedSettings | null>(null);
-  const [bestVolumeInput, setBestVolumeInput] = useState('');
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const toast = useToast();
+
+  const loadBean = async () => {
+    if (!beanId) return;
+    const beanRes = await apiGet<Bean>(`/api/beans/${beanId}`);
+    setBean(beanRes);
+    setMeta({
+      roaster: beanRes.roaster ?? '',
+      origin: beanRes.origin ?? '',
+      process: beanRes.process ?? '',
+      roast_level: beanRes.roast_level ?? '',
+      roast_date: beanRes.roast_date ?? '',
+      open_date: beanRes.open_date ?? '',
+      bag_size_g: beanRes.bag_size_g ?? '',
+      price: beanRes.price ?? '',
+      decaf: beanRes.decaf,
+      tasting_notes: beanRes.tasting_notes ?? '',
+      notes: beanRes.notes ?? ''
+    });
+  };
 
   useEffect(() => {
     if (!beanId) return;
-    const load = async () => {
-      const beanRes = await apiGet<Bean>(`/api/beans/${beanId}`);
-      const analyticsRes = await apiGet<BeanAnalytics>(`/api/beans/${beanId}/analytics`);
-      const recRes = await apiGet<RecommendedSettings>(`/api/beans/${beanId}/recommended-settings`);
-      setBean(beanRes);
-      setForm(beanRes);
-      setAnalytics(analyticsRes);
-      setRecommended(recRes);
-    };
-    load();
+    loadBean();
+    apiGet<BeanAnalytics>(`/api/beans/${beanId}/analytics`).then(setAnalytics);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beanId]);
 
-  const handleUpdate = async () => {
-    if (!beanId) return;
-    const updated = await apiSend<Bean>(`/api/beans/${beanId}`, 'PUT', form);
-    setBean(updated);
-    setForm(updated);
-  };
-
-  const handleArchive = async (archive: boolean) => {
-    if (!beanId) return;
-    const updated = await apiSend<Bean>(`/api/beans/${beanId}/${archive ? 'archive' : 'unarchive'}`, 'POST');
-    setBean(updated);
-  };
-
-  const handleUpload = async (file: File) => {
-    if (!beanId) return;
-    const updated = await uploadFile<Bean>(`/api/beans/${beanId}/photo`, file);
-    setBean(updated);
-  };
-
-  const currentBest = (form.current_best_settings || {}) as BeanBestSettings;
-
+  // Load the draft + recommendation for the selected drink type.
   useEffect(() => {
-    const volumeMl = Number(currentBest.coffee_volume_ml || 0);
-    setBestVolumeInput(unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl));
-  }, [currentBest.coffee_volume_ml, unit]);
+    if (!bean) return;
+    setRecipeDraft(recipeForType(bean, recipeType) ?? DEFAULT_SETTINGS);
+    if (beanId) {
+      apiGet<RecommendedSettings>(
+        `/api/beans/${beanId}/recommended-settings?drink_type=${encodeURIComponent(recipeType)}`
+      ).then(setRecommended);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeType, bean?.id]);
 
-  if (!bean) {
-    return <div className="card">Loading...</div>;
-  }
+  const savedRecipe = useMemo(() => recipeForType(bean ?? undefined, recipeType), [bean, recipeType]);
+
+  if (!bean) return <div className="card p-6 text-muted">Loading…</div>;
+
+  const photos = bean.photos ?? [];
+  const cover = mediaUrl(bean.image_path);
+
+  const saveMeta = async () => {
+    const payload = {
+      ...meta,
+      name: bean.name,
+      bag_size_g: meta.bag_size_g ? Number(meta.bag_size_g) : null,
+      price: meta.price ? Number(meta.price) : null,
+      roast_date: meta.roast_date || null,
+      open_date: meta.open_date || null
+    };
+    const updated = await apiSend<Bean>(`/api/beans/${beanId}`, 'PUT', payload);
+    setBean((prev) => ({ ...updated, recipes: prev?.recipes, photos: prev?.photos }));
+    toast('Bean saved', 'success');
+  };
+
+  const toggleArchive = async () => {
+    const updated = await apiSend<Bean>(`/api/beans/${beanId}/${bean.archived ? 'unarchive' : 'archive'}`, 'POST');
+    setBean((prev) => (prev ? { ...prev, archived: updated.archived } : updated));
+    toast(updated.archived ? 'Bean archived' : 'Bean unarchived');
+  };
+
+  const onUpload = async (file?: File) => {
+    if (!file || !beanId) return;
+    const updated = await uploadBeanPhoto(beanId, file);
+    setBean(updated);
+    toast('Photo added', 'success');
+  };
+
+  const onSetCover = async (photoId: string) => {
+    if (!beanId) return;
+    setBean(await setBeanCover(beanId, photoId));
+    toast('Cover updated');
+  };
+
+  const onDeletePhoto = async (photoId: string) => {
+    if (!beanId) return;
+    setBean(await deleteBeanPhoto(beanId, photoId));
+    setLightbox(null);
+    toast('Photo removed');
+  };
+
+  const saveRecipe = async () => {
+    if (!beanId) return;
+    const recipe = await upsertRecipe(beanId, recipeType, recipeDraft);
+    setBean((prev) =>
+      prev
+        ? { ...prev, recipes: [...(prev.recipes ?? []).filter((r) => r.drink_type !== recipeType), recipe] }
+        : prev
+    );
+    toast(`Saved ${recipeType} recipe`, 'success');
+  };
+
+  const removeRecipe = async () => {
+    if (!beanId) return;
+    await deleteRecipe(beanId, recipeType);
+    setBean((prev) =>
+      prev ? { ...prev, recipes: (prev.recipes ?? []).filter((r) => r.drink_type !== recipeType) } : prev
+    );
+    setRecipeDraft(DEFAULT_SETTINGS);
+    toast(`Removed ${recipeType} recipe`);
+  };
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'recipes', label: 'Recipes' },
+    { id: 'analytics', label: 'Analytics' }
+  ];
+
+  const metaFields: [string, string, string?][] = [
+    ['Roaster', 'roaster'],
+    ['Origin', 'origin'],
+    ['Process', 'process'],
+    ['Roast level', 'roast_level'],
+    ['Roast date', 'roast_date', 'date'],
+    ['Open date', 'open_date', 'date'],
+    ['Bag size (g)', 'bag_size_g', 'number'],
+    ['Price', 'price', 'number']
+  ];
 
   return (
-    <div className="stack">
-      <section className="card stack">
-        <div className="inline" style={{ justifyContent: 'space-between' }}>
-          <h3>{bean.name}</h3>
-          <div className="inline">
-            <button onClick={() => handleArchive(!bean.archived)}>
-              {bean.archived ? 'Unarchive' : 'Archive'}
-            </button>
-            <button className="primary" onClick={handleUpdate}>
-              Save Changes
-            </button>
+    <div className="flex flex-col gap-5">
+      <Link to="/beans" className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-text">
+        <ArrowLeft size={16} /> All beans
+      </Link>
+
+      {/* Hero */}
+      <section className="card overflow-hidden">
+        <div className="relative aspect-[21/9] w-full bg-surface-muted">
+          {cover ? (
+            <img src={cover} alt={bean.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="grid h-full w-full place-items-center text-muted">
+              <ImagePlus size={36} strokeWidth={1.4} />
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h1 className="text-2xl font-bold text-white drop-shadow">{bean.name}</h1>
+                <p className="text-sm text-white/85">
+                  {[bean.roaster, bean.origin].filter(Boolean).join(' · ') || 'No roaster set'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {bean.decaf && <span className="badge">Decaf</span>}
+                {bean.archived && <span className="badge">Archived</span>}
+              </div>
+            </div>
           </div>
         </div>
-        <div className="grid two">
-          <label className="stack">
-            <span className="label">Roaster</span>
-            <input value={form.roaster || ''} onChange={(event) => setForm({ ...form, roaster: event.target.value })} />
-          </label>
-          <label className="stack">
-            <span className="label">Origin</span>
-            <input value={form.origin || ''} onChange={(event) => setForm({ ...form, origin: event.target.value })} />
-          </label>
-          <label className="stack">
-            <span className="label">Process</span>
-            <input value={form.process || ''} onChange={(event) => setForm({ ...form, process: event.target.value })} />
-          </label>
-          <label className="stack">
-            <span className="label">Roast Level</span>
-            <input value={form.roast_level || ''} onChange={(event) => setForm({ ...form, roast_level: event.target.value })} />
-          </label>
-          <label className="stack">
-            <span className="label">Notes</span>
-            <textarea value={form.notes || ''} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-          </label>
-        </div>
-        <div className="card stack sub-card">
-          <h4 style={{ margin: 0 }}>Best Espresso Settings</h4>
-          <div className="grid two">
-            <label className="stack">
-              <span className="label">Grind (1-7)</span>
-              <input
-                type="number"
-                min="1"
-                max="7"
-                value={Number(currentBest.grind_setting || 0)}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    current_best_settings: { ...currentBest, grind_setting: Number(event.target.value) }
-                  })
-                }
-              />
-            </label>
-            <label className="stack">
-              <span className="label">Coffee Volume ({unit})</span>
-              <input
-                type="number"
-                min="0"
-                step={unit === 'oz' ? '0.1' : '1'}
-                value={bestVolumeInput}
-                onChange={(event) => {
-                  setBestVolumeInput(event.target.value);
-                  const next = Number(event.target.value || 0);
-                  setForm({
-                    ...form,
-                    current_best_settings: {
-                      ...currentBest,
-                      coffee_volume_ml: unit === 'oz' ? ozToMl(next) : next
-                    }
-                  });
-                }}
-              />
-            </label>
-            <label className="stack">
-              <span className="label">Strength</span>
-              <select
-                value={currentBest.strength_level || 'MEDIUM'}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    current_best_settings: { ...currentBest, strength_level: event.target.value }
-                  })
-                }
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-              </select>
-            </label>
-            <label className="stack">
-              <span className="label">Temperature</span>
-              <select
-                value={currentBest.temperature_level || 'MEDIUM'}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    current_best_settings: { ...currentBest, temperature_level: event.target.value }
-                  })
-                }
-              >
-                <option value="LOW">Low</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="HIGH">High</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        <label className="stack">
-          <span className="label">Bean Photo</span>
-          <input type="file" onChange={(event) => event.target.files?.[0] && handleUpload(event.target.files[0])} />
-        </label>
-      </section>
-      <section className="grid two">
-        <div className="card">
-          <h3>Recommended Settings</h3>
-          <p className="label">Considered drinks: {recommended?.total_considered ?? 0}</p>
-          <p className="label">
-            Grind {String(recommended?.recommended?.grind_setting ?? '-')} ·{' '}
-            {formatVolume(Number(recommended?.recommended?.coffee_volume_ml || 0), unit)} ·{' '}
-            {String(recommended?.recommended?.temperature_level || '-')}
-          </p>
-        </div>
-        <div className="card">
-          <h3>Highest Rated Brew</h3>
-          <p className="label">
-            Grind {String(recommended?.highest_rated?.grind_setting ?? '-')} ·{' '}
-            {formatVolume(Number(recommended?.highest_rated?.coffee_volume_ml || 0), unit)} · Rating{' '}
-            {String(recommended?.highest_rated?.overall_rating ?? '-')}
-          </p>
-        </div>
-      </section>
-      <section className="grid two">
-        <div className="card" style={{ height: 260 }}>
-          <h3>Overall Rating vs Grind</h3>
-          <ResponsiveContainer width="100%" height="80%">
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="x" name="Grind" />
-              <YAxis dataKey="y" name="Rating" />
-              <Tooltip />
-              <Scatter data={analytics?.rating_vs_grind || []} fill="#9c6b4f" />
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="card" style={{ height: 260 }}>
-          <h3>Overall Rating vs Coffee Volume</h3>
-          <ResponsiveContainer width="100%" height="80%">
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="x" name="Coffee Volume" />
-              <YAxis dataKey="y" name="Rating" />
-              <Tooltip />
-              <Scatter data={analytics?.rating_vs_coffee_volume || []} fill="#9c6b4f" />
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="card" style={{ height: 260 }}>
-          <h3>Rating by Temperature</h3>
-          <ResponsiveContainer width="100%" height="80%">
-            <BarChart data={analytics?.rating_by_temperature || []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="temperature_level" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="average_rating" fill="#9c6b4f" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="card" style={{ height: 260 }}>
-          <h3>Average Rating Over Time</h3>
-          <ResponsiveContainer width="100%" height="80%">
-            <LineChart data={analytics?.rating_timeline || []}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="average_rating" stroke="#9c6b4f" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-      <section className="card" style={{ height: 320 }}>
-        <h3>Flavor Radar</h3>
-        <ResponsiveContainer width="100%" height="80%">
-          <RadarChart data={analytics?.radar || []}>
-            <PolarGrid />
-            <PolarAngleAxis dataKey="category" />
-            <PolarRadiusAxis />
-            <Radar name="Average" dataKey="average" stroke="#9c6b4f" fill="#9c6b4f" fillOpacity={0.4} />
-            <Radar
-              name="Top Rated"
-              dataKey="top_rated_average"
-              stroke="#f0c9a2"
-              fill="#f0c9a2"
-              fillOpacity={0.2}
+
+        {/* Photo strip */}
+        <div className="flex items-center gap-2 overflow-x-auto p-3">
+          {photos.map((photo) => (
+            <button
+              key={photo.id}
+              type="button"
+              onClick={() => setLightbox(photo.id)}
+              className={cn(
+                'relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border',
+                bean.image_path === photo.image_path ? 'border-accent' : 'border-border'
+              )}
+            >
+              <img src={mediaUrl(photo.thumbnail_path)} alt={photo.caption ?? bean.name} className="h-full w-full object-cover" />
+            </button>
+          ))}
+          <label className="grid h-16 w-16 shrink-0 cursor-pointer place-items-center rounded-lg border border-dashed border-border-strong text-muted hover:text-text">
+            <Upload size={18} />
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => onUpload(e.target.files?.[0])}
             />
-          </RadarChart>
-        </ResponsiveContainer>
+          </label>
+        </div>
       </section>
+
+      {/* Tabs */}
+      <div className="segmented w-full sm:max-w-md">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="segmented-item"
+            data-active={tab === t.id}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'overview' && (
+        <section className="card flex flex-col gap-4 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="section-title">Details</h2>
+            <div className="flex gap-2">
+              <button className="btn" onClick={toggleArchive}>
+                {bean.archived ? 'Unarchive' : 'Archive'}
+              </button>
+              <button className="btn btn-primary" onClick={saveMeta}>
+                Save
+              </button>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {metaFields.map(([label, key, type]) => (
+              <label key={key} className="flex flex-col gap-1.5">
+                <span className="field-label">{label}</span>
+                <input
+                  className="input"
+                  type={type ?? 'text'}
+                  value={String(meta[key] ?? '')}
+                  onChange={(e) => setMeta({ ...meta, [key]: e.target.value })}
+                />
+              </label>
+            ))}
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="field-label">Tasting notes</span>
+              <input
+                className="input"
+                value={String(meta.tasting_notes ?? '')}
+                onChange={(e) => setMeta({ ...meta, tasting_notes: e.target.value })}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 sm:col-span-2">
+              <span className="field-label">Notes</span>
+              <textarea
+                className="input"
+                value={String(meta.notes ?? '')}
+                onChange={(e) => setMeta({ ...meta, notes: e.target.value })}
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 sm:col-span-2">
+              <span className="text-sm font-semibold">Decaf</span>
+              <Switch ariaLabel="Decaf" checked={!!meta.decaf} onCheckedChange={(decaf) => setMeta({ ...meta, decaf })} />
+            </label>
+          </div>
+        </section>
+      )}
+
+      {tab === 'recipes' && (
+        <section className="flex flex-col gap-4">
+          <div className="card flex flex-col gap-4 p-5">
+            <div>
+              <h2 className="section-title">Best recipe per drink</h2>
+              <p className="text-sm text-muted">Dial each drink type once; the Log screen loads it automatically.</p>
+            </div>
+            <ChipSelect ariaLabel="Recipe drink type" options={DRINK_TYPES} value={recipeType} onChange={setRecipeType} />
+            <RecipeControls value={recipeDraft} onChange={(patch) => setRecipeDraft((d) => ({ ...d, ...patch }))} unit={unit} />
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-primary" onClick={saveRecipe}>
+                Save {recipeType} recipe
+              </button>
+              {savedRecipe && (
+                <button className="btn btn-danger" onClick={removeRecipe}>
+                  <Trash2 size={16} /> Remove
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="card flex flex-col gap-3 p-5">
+            <h3 className="section-title flex items-center gap-2">
+              <Wand2 size={18} className="text-accent" /> Suggested from your logs
+            </h3>
+            <p className="text-sm text-muted">
+              Based on {recommended?.total_considered ?? 0} highly-rated {recipeType} logs.
+            </p>
+            {recommended?.recommended ? (
+              <>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <Stat label="Grind" value={String(recommended.recommended.grind_setting ?? '–')} />
+                  <Stat label="Coffee" value={formatVolume(Number(recommended.recommended.coffee_volume_ml || 0), unit)} />
+                  <Stat label="Strength" value={String(recommended.recommended.strength_level ?? '–')} />
+                  <Stat label="Temp" value={String(recommended.recommended.temperature_level ?? '–')} />
+                </div>
+                <button className="btn self-start" onClick={() => setRecipeDraft({ ...recommended.recommended })}>
+                  Apply suggestion
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-muted">Not enough 4★+ logs for {recipeType} yet.</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {tab === 'analytics' && (
+        <section className="grid gap-4 lg:grid-cols-2">
+          <ChartCard title="Rating vs grind">
+            <ScatterChart>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="x" name="Grind" stroke="var(--muted)" fontSize={12} />
+              <YAxis dataKey="y" name="Rating" stroke="var(--muted)" fontSize={12} domain={[0, 5]} />
+              <Tooltip />
+              <Scatter data={analytics?.rating_vs_grind || []} fill={CHART_COLOR} />
+            </ScatterChart>
+          </ChartCard>
+          <ChartCard title="Rating vs coffee volume">
+            <ScatterChart>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="x" name="Volume" stroke="var(--muted)" fontSize={12} />
+              <YAxis dataKey="y" name="Rating" stroke="var(--muted)" fontSize={12} domain={[0, 5]} />
+              <Tooltip />
+              <Scatter data={analytics?.rating_vs_coffee_volume || []} fill={CHART_COLOR} />
+            </ScatterChart>
+          </ChartCard>
+          <ChartCard title="Rating by temperature">
+            <BarChart data={analytics?.rating_by_temperature || []}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="temperature_level" stroke="var(--muted)" fontSize={12} />
+              <YAxis stroke="var(--muted)" fontSize={12} domain={[0, 5]} />
+              <Tooltip />
+              <Bar dataKey="average_rating" fill={CHART_COLOR} radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ChartCard>
+          <ChartCard title="Rating over time">
+            <LineChart data={analytics?.rating_timeline || []}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" stroke="var(--muted)" fontSize={12} />
+              <YAxis stroke="var(--muted)" fontSize={12} domain={[0, 5]} />
+              <Tooltip />
+              <Line type="monotone" dataKey="average_rating" stroke={CHART_COLOR} strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+          </ChartCard>
+          <div className="lg:col-span-2">
+            <ChartCard title="Flavor radar" height={320}>
+              <RadarChart data={analytics?.radar || []}>
+                <PolarGrid stroke="var(--border)" />
+                <PolarAngleAxis dataKey="category" stroke="var(--muted)" fontSize={12} />
+                <PolarRadiusAxis domain={[0, 5]} stroke="var(--border)" />
+                <Radar name="Average" dataKey="average" stroke={CHART_COLOR} fill={CHART_COLOR} fillOpacity={0.4} />
+                <Radar name="Top rated" dataKey="top_rated_average" stroke={CHART_COLOR_2} fill={CHART_COLOR_2} fillOpacity={0.25} />
+              </RadarChart>
+            </ChartCard>
+          </div>
+        </section>
+      )}
+
+      {/* Lightbox */}
+      <Dialog open={!!lightbox} onOpenChange={(open) => !open && setLightbox(null)}>
+        {lightbox &&
+          (() => {
+            const photo = photos.find((p) => p.id === lightbox);
+            if (!photo) return null;
+            const isCover = bean.image_path === photo.image_path;
+            return (
+              <DialogContent wide bare>
+                <DialogTitle className="sr-only">Bean photo</DialogTitle>
+                <img
+                  src={mediaUrl(photo.image_path)}
+                  alt={photo.caption ?? bean.name}
+                  className="mx-auto max-h-[78vh] w-auto rounded-xl object-contain"
+                />
+                <div className="mt-3 flex justify-center gap-2">
+                  {!isCover && (
+                    <button className="btn" onClick={() => onSetCover(photo.id)}>
+                      <Star size={16} /> Set as cover
+                    </button>
+                  )}
+                  <button className="btn btn-danger" onClick={() => onDeletePhoto(photo.id)}>
+                    <Trash2 size={16} /> Delete
+                  </button>
+                  <DialogClose asChild>
+                    <button className="btn">Close</button>
+                  </DialogClose>
+                </div>
+              </DialogContent>
+            );
+          })()}
+      </Dialog>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card-muted px-3 py-2">
+      <div className="field-label">{label}</div>
+      <div className="font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function ChartCard({ title, children, height = 240 }: { title: string; children: ReactElement; height?: number }) {
+  return (
+    <div className="card p-4">
+      <h3 className="section-title mb-2">{title}</h3>
+      <div style={{ height }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {children}
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

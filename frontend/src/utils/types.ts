@@ -8,6 +8,29 @@ export type BeanBestSettings = {
   grind_setting?: number;
 };
 
+export type RecipeSettings = BeanBestSettings;
+
+export type BeanRecipe = {
+  id: string;
+  bean_id: string;
+  drink_type: string;
+  settings: RecipeSettings;
+  source: string;
+  source_drink_id?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BeanPhoto = {
+  id: string;
+  bean_id: string;
+  image_path: string;
+  thumbnail_path: string;
+  caption?: string | null;
+  sort_order: number;
+  created_at: string;
+};
+
 export type Bean = {
   id: string;
   name: string;
@@ -26,6 +49,8 @@ export type Bean = {
   thumbnail_path?: string | null;
   archived: boolean;
   current_best_settings?: BeanBestSettings | null;
+  recipes?: BeanRecipe[];
+  photos?: BeanPhoto[];
   created_at: string;
   updated_at: string;
 };

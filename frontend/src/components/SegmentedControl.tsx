@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { cn } from './ui/cn';
 
 type Option = {
   value: string;
@@ -12,12 +13,11 @@ type Props = {
   onChange: (value: string) => void;
   ariaLabel: string;
   className?: string;
-  hideLabels?: boolean;
 };
 
-export default function SegmentedControl({ value, options, onChange, ariaLabel, className, hideLabels = false }: Props) {
+export default function SegmentedControl({ value, options, onChange, ariaLabel, className }: Props) {
   return (
-    <div className={`segmented-control${className ? ` ${className}` : ''}`} role="radiogroup" aria-label={ariaLabel}>
+    <div className={cn('segmented', className)} role="radiogroup" aria-label={ariaLabel}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -25,10 +25,11 @@ export default function SegmentedControl({ value, options, onChange, ariaLabel, 
           role="radio"
           aria-checked={value === option.value}
           aria-label={option.ariaLabel ?? (typeof option.label === 'string' ? option.label : undefined)}
-          className={value === option.value ? 'segmented-item active' : 'segmented-item'}
+          data-active={value === option.value}
+          className="segmented-item"
           onClick={() => onChange(option.value)}
         >
-          {hideLabels ? <span className="segmented-marker" aria-hidden="true" /> : option.label}
+          {option.label}
         </button>
       ))}
     </div>
