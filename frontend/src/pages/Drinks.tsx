@@ -18,12 +18,14 @@ export default function Drinks({ unit }: { unit: string }) {
   const [sort, setSort] = useState<'newest' | 'oldest' | 'rating'>('newest');
 
   useEffect(() => {
-    Promise.all([apiGet<DrinkLog[]>('/api/drinks'), apiGet<Bean[]>('/api/beans?include_archived=true')]).then(
-      ([drinksRes, beansRes]) => {
-        setDrinks(drinksRes);
-        setBeans(beansRes);
-      }
-    );
+    // Fetch independently so a beans-API failure can't blank the drink history;
+    // bean names just fall back to "Unknown bean" until beans load.
+    apiGet<DrinkLog[]>('/api/drinks')
+      .then(setDrinks)
+      .catch((err) => console.error('Failed to load drinks', err));
+    apiGet<Bean[]>('/api/beans?include_archived=true')
+      .then(setBeans)
+      .catch((err) => console.error('Failed to load beans', err));
   }, []);
 
   const beanName = (beanId: string) => beans.find((bean) => bean.id === beanId)?.name || 'Unknown bean';
