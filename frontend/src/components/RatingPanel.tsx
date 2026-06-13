@@ -1,13 +1,9 @@
 import StarRating from './StarRating';
-import SegmentedControl from './SegmentedControl';
+import { Slider } from './ui/Slider';
 import { Switch } from './ui/Switch';
 
 export type RatingValues = {
   overall_rating: number;
-  sweetness: number;
-  bitterness: number;
-  acidity: number;
-  body_mouthfeel: number;
   balance: number;
   would_make_again: boolean;
   dialed_in: boolean;
@@ -18,12 +14,13 @@ type Props = {
   onChange: (patch: Partial<RatingValues>) => void;
 };
 
-const DIMENSIONS: { key: keyof RatingValues; label: string }[] = [
-  { key: 'sweetness', label: 'Sweetness' },
-  { key: 'bitterness', label: 'Bitterness' },
-  { key: 'acidity', label: 'Acidity' },
-  { key: 'body_mouthfeel', label: 'Body' }
-];
+const BALANCE_LABEL: Record<number, string> = {
+  1: 'Sour',
+  2: 'Leans sour',
+  3: 'Balanced',
+  4: 'Leans bitter',
+  5: 'Bitter'
+};
 
 export default function RatingPanel({ value, onChange }: Props) {
   return (
@@ -38,37 +35,19 @@ export default function RatingPanel({ value, onChange }: Props) {
         />
       </div>
 
-      <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
-        {DIMENSIONS.map(({ key, label }) => (
-          <div key={key} className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-muted">{label}</span>
-            <StarRating
-              label={label}
-              size={20}
-              value={value[key] as number}
-              onChange={(next) => onChange({ [key]: next } as Partial<RatingValues>)}
-            />
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="field-label">Sour</span>
-          <span className="field-label">Balanced</span>
+          <span className="text-sm font-semibold text-accent">{BALANCE_LABEL[value.balance]}</span>
           <span className="field-label">Bitter</span>
         </div>
-        <SegmentedControl
+        <Slider
           ariaLabel="Sour to bitter balance"
-          value={String(value.balance)}
-          options={[
-            { value: '1', label: '1', ariaLabel: 'Sour' },
-            { value: '2', label: '2', ariaLabel: 'Leans sour' },
-            { value: '3', label: '3', ariaLabel: 'Balanced' },
-            { value: '4', label: '4', ariaLabel: 'Leans bitter' },
-            { value: '5', label: '5', ariaLabel: 'Bitter' }
-          ]}
-          onChange={(next) => onChange({ balance: Number(next) })}
+          value={value.balance}
+          min={1}
+          max={5}
+          step={1}
+          onValueChange={(balance) => onChange({ balance })}
         />
       </div>
 

@@ -14,6 +14,7 @@ export default function Drinks({ unit }: { unit: string }) {
   const [search, setSearch] = useState('');
   const [rating, setRating] = useState('all');
   const [drinkType, setDrinkType] = useState('all');
+  const [sort, setSort] = useState<'newest' | 'oldest' | 'rating'>('newest');
 
   useEffect(() => {
     Promise.all([apiGet<DrinkLog[]>('/api/drinks'), apiGet<Bean[]>('/api/beans?include_archived=true')]).then(
@@ -39,9 +40,13 @@ export default function Drinks({ unit }: { unit: string }) {
             (item || '').toLowerCase().includes(q)
           );
         })
-        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+        .sort((a, b) => {
+          if (sort === 'oldest') return a.created_at.localeCompare(b.created_at);
+          if (sort === 'rating') return b.overall_rating - a.overall_rating || b.created_at.localeCompare(a.created_at);
+          return b.created_at.localeCompare(a.created_at);
+        }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [drinks, beans, search, rating, drinkType]
+    [drinks, beans, search, rating, drinkType, sort]
   );
 
   return (
@@ -51,7 +56,7 @@ export default function Drinks({ unit }: { unit: string }) {
         <p className="text-sm text-muted">Every brew you've logged, newest first.</p>
       </div>
 
-      <div className="card grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto]">
+      <div className="card grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto_auto]">
         <label className="relative">
           <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
@@ -61,13 +66,18 @@ export default function Drinks({ unit }: { unit: string }) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
-        <select className="input sm:w-40" value={rating} onChange={(e) => setRating(e.target.value)}>
+        <select className="input sm:w-36" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="rating">Highest rated</option>
+        </select>
+        <select className="input sm:w-36" value={rating} onChange={(e) => setRating(e.target.value)}>
           <option value="all">All ratings</option>
           <option value="5">5 stars</option>
           <option value="4">4+ stars</option>
           <option value="3">3+ stars</option>
         </select>
-        <select className="input sm:w-44" value={drinkType} onChange={(e) => setDrinkType(e.target.value)}>
+        <select className="input sm:w-40" value={drinkType} onChange={(e) => setDrinkType(e.target.value)}>
           <option value="all">All types</option>
           {uniqueTypes.map((type) => (
             <option key={type} value={type}>

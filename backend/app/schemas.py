@@ -16,6 +16,7 @@ class BeanBase(BaseModel):
     bag_size_g: int | None = None
     price: float | None = None
     decaf: bool = False
+    rating: int | None = None
     notes: str | None = None
     archived: bool = False
     current_best_settings: dict | None = None

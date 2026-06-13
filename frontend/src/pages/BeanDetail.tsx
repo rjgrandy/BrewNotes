@@ -12,12 +12,7 @@ import {
   BarChart,
   Bar,
   LineChart,
-  Line,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis
+  Line
 } from 'recharts';
 import { apiGet, apiSend } from '../utils/api';
 import { upsertRecipe, deleteRecipe, uploadBeanPhoto, deleteBeanPhoto, setBeanCover, recipeForType } from '../utils/beanApi';
@@ -27,6 +22,8 @@ import { formatVolume } from '../utils/units';
 import { mediaUrl } from '../utils/media';
 import ChipSelect from '../components/ChipSelect';
 import RecipeControls from '../components/RecipeControls';
+import RecipeSummary from '../components/RecipeSummary';
+import StarRating from '../components/StarRating';
 import { useToast } from '../components/ui/Toast';
 import { Dialog, DialogContent, DialogTitle, DialogClose } from '../components/ui/Dialog';
 import { Switch } from '../components/ui/Switch';
@@ -36,7 +33,6 @@ type Props = { unit: string };
 type Tab = 'overview' | 'recipes' | 'analytics';
 
 const CHART_COLOR = 'var(--accent)';
-const CHART_COLOR_2 = 'var(--gold)';
 
 export default function BeanDetail({ unit }: Props) {
   const { beanId } = useParams();
@@ -94,6 +90,7 @@ export default function BeanDetail({ unit }: Props) {
 
   const photos = bean.photos ?? [];
   const cover = mediaUrl(bean.image_path);
+  const espresso = recipeForType(bean, 'Espresso');
 
   const saveMeta = async () => {
     const payload = {
@@ -113,6 +110,11 @@ export default function BeanDetail({ unit }: Props) {
     const updated = await apiSend<Bean>(`/api/beans/${beanId}/${bean.archived ? 'unarchive' : 'archive'}`, 'POST');
     setBean((prev) => (prev ? { ...prev, archived: updated.archived } : updated));
     toast(updated.archived ? 'Bean archived' : 'Bean unarchived');
+  };
+
+  const saveRating = async (rating: number) => {
+    const updated = await apiSend<Bean>(`/api/beans/${beanId}`, 'PUT', { name: bean.name, rating });
+    setBean((prev) => (prev ? { ...prev, rating: updated.rating } : updated));
   };
 
   const onUpload = async (file?: File) => {
@@ -189,13 +191,17 @@ export default function BeanDetail({ unit }: Props) {
               <ImagePlus size={36} strokeWidth={1.4} />
             </div>
           )}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
                 <h1 className="text-2xl font-bold text-white drop-shadow">{bean.name}</h1>
                 <p className="text-sm text-white/85">
                   {[bean.roaster, bean.origin].filter(Boolean).join(' · ') || 'No roaster set'}
                 </p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <StarRating label="Bean rating" size={22} value={bean.rating ?? 0} onChange={saveRating} />
+                  <span className="text-xs text-white/70">Rate this bean</span>
+                </div>
               </div>
               <div className="flex gap-2">
                 {bean.decaf && <span className="badge">Decaf</span>}
@@ -249,7 +255,24 @@ export default function BeanDetail({ unit }: Props) {
       </div>
 
       {tab === 'overview' && (
-        <section className="card flex flex-col gap-4 p-5">
+        <div className="flex flex-col gap-4">
+          <section className="card flex flex-col gap-3 p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="section-title">Optimal espresso</h2>
+              <button className="btn !min-h-0 px-3 py-1.5 text-xs" onClick={() => setTab('recipes')}>
+                Edit recipes
+              </button>
+            </div>
+            {espresso ? (
+              <RecipeSummary settings={espresso} unit={unit} />
+            ) : (
+              <p className="text-sm text-muted">
+                No espresso recipe yet — add one in the Recipes tab and it'll show here and auto-load on the Log screen.
+              </p>
+            )}
+          </section>
+
+          <section className="card flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="section-title">Details</h2>
             <div className="flex gap-2">
@@ -294,7 +317,8 @@ export default function BeanDetail({ unit }: Props) {
               <Switch ariaLabel="Decaf" checked={!!meta.decaf} onCheckedChange={(decaf) => setMeta({ ...meta, decaf })} />
             </label>
           </div>
-        </section>
+          </section>
+        </div>
       )}
 
       {tab === 'recipes' && (
@@ -382,17 +406,6 @@ export default function BeanDetail({ unit }: Props) {
               <Line type="monotone" dataKey="average_rating" stroke={CHART_COLOR} strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ChartCard>
-          <div className="lg:col-span-2">
-            <ChartCard title="Flavor radar" height={320}>
-              <RadarChart data={analytics?.radar || []}>
-                <PolarGrid stroke="var(--border)" />
-                <PolarAngleAxis dataKey="category" stroke="var(--muted)" fontSize={12} />
-                <PolarRadiusAxis domain={[0, 5]} stroke="var(--border)" />
-                <Radar name="Average" dataKey="average" stroke={CHART_COLOR} fill={CHART_COLOR} fillOpacity={0.4} />
-                <Radar name="Top rated" dataKey="top_rated_average" stroke={CHART_COLOR_2} fill={CHART_COLOR_2} fillOpacity={0.25} />
-              </RadarChart>
-            </ChartCard>
-          </div>
         </section>
       )}
 
