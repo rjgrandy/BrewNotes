@@ -1,7 +1,18 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -31,6 +42,52 @@ class Bean(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     drinks: Mapped[list["DrinkLog"]] = relationship("DrinkLog", back_populates="bean")
+    recipes: Mapped[list["BeanRecipe"]] = relationship(
+        "BeanRecipe",
+        back_populates="bean",
+        cascade="all, delete-orphan",
+        order_by="BeanRecipe.drink_type",
+    )
+    photos: Mapped[list["BeanPhoto"]] = relationship(
+        "BeanPhoto",
+        back_populates="bean",
+        cascade="all, delete-orphan",
+        order_by="BeanPhoto.sort_order",
+    )
+
+
+class BeanRecipe(Base):
+    """A bean's saved optimal settings for one drink type (e.g. Espresso, Latte)."""
+
+    __tablename__ = "bean_recipes"
+    __table_args__ = (UniqueConstraint("bean_id", "drink_type", name="uq_bean_recipe_drink_type"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    bean_id: Mapped[str] = mapped_column(String, ForeignKey("beans.id"), nullable=False, index=True)
+    drink_type: Mapped[str] = mapped_column(String, nullable=False)
+    settings: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source: Mapped[str] = mapped_column(String, default="manual")
+    source_drink_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    bean: Mapped[Bean] = relationship("Bean", back_populates="recipes")
+
+
+class BeanPhoto(Base):
+    """A reference photo for a bean (bag front, label, roast date, etc.)."""
+
+    __tablename__ = "bean_photos"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    bean_id: Mapped[str] = mapped_column(String, ForeignKey("beans.id"), nullable=False, index=True)
+    image_path: Mapped[str] = mapped_column(String, nullable=False)
+    thumbnail_path: Mapped[str] = mapped_column(String, nullable=False)
+    caption: Mapped[str | None] = mapped_column(String, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    bean: Mapped[Bean] = relationship("Bean", back_populates="photos")
 
 
 class DrinkLog(Base):

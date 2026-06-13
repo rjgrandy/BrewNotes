@@ -30,12 +30,57 @@ class BeanUpdate(BeanBase):
     thumbnail_path: str | None = None
 
 
+class RecipeSettings(BaseModel):
+    temperature_level: str | None = None
+    body_level: str | None = None
+    order: str | None = None
+    coffee_volume_ml: float | None = None
+    milk_volume_ml: float | None = None
+    strength_level: str | None = None
+    grind_setting: int | None = None
+
+
+class BeanRecipeIn(BaseModel):
+    settings: RecipeSettings
+    source: str = "manual"
+    source_drink_id: str | None = None
+
+
+class BeanRecipeOut(BaseModel):
+    id: str
+    bean_id: str
+    drink_type: str
+    settings: dict
+    source: str
+    source_drink_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BeanPhotoOut(BaseModel):
+    id: str
+    bean_id: str
+    image_path: str
+    thumbnail_path: str
+    caption: str | None = None
+    sort_order: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class BeanOut(BeanBase):
     id: str
     image_path: str | None = None
     thumbnail_path: str | None = None
     created_at: datetime
     updated_at: datetime
+    recipes: list[BeanRecipeOut] = []
+    photos: list[BeanPhotoOut] = []
 
     class Config:
         from_attributes = True

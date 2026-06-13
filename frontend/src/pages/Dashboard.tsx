@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Sparkles, Trophy, BookmarkPlus } from 'lucide-react';
 import { apiGet, apiSend } from '../utils/api';
-import { Bean, DrinkLog } from '../utils/types';
+import { upsertRecipe, recipeForType } from '../utils/beanApi';
+import { Bean, DrinkLog, RecipeSettings } from '../utils/types';
 import { DEFAULT_RATINGS, DEFAULT_SETTINGS, DRINK_TYPES } from '../utils/constants';
-import { formatVolume, ozToMl } from '../utils/units';
+import { formatVolume } from '../utils/units';
 import { addRecentName, getDefaultName, getRecentNames } from '../utils/attribution';
-import SegmentedControl from '../components/SegmentedControl';
-import StarRating from '../components/StarRating';
+import ChipSelect from '../components/ChipSelect';
+import RecipeControls from '../components/RecipeControls';
+import RatingPanel from '../components/RatingPanel';
+import { useToast } from '../components/ui/Toast';
+import { Dialog, DialogContent, DialogTitle, DialogClose } from '../components/ui/Dialog';
 
 const defaultDrink = {
   custom_label: '',
@@ -13,6 +18,28 @@ const defaultDrink = {
   ...DEFAULT_SETTINGS,
   ...DEFAULT_RATINGS
 };
+
+const SETTING_KEYS: (keyof RecipeSettings)[] = [
+  'temperature_level',
+  'body_level',
+  'order',
+  'coffee_volume_ml',
+  'milk_volume_ml',
+  'strength_level',
+  'grind_setting'
+];
+
+const extractSettings = (source: DrinkLog | RecipeSettings): RecipeSettings => {
+  const out: RecipeSettings = {};
+  for (const key of SETTING_KEYS) {
+    const val = (source as Record<string, unknown>)[key];
+    if (val !== undefined && val !== null) (out as Record<string, unknown>)[key] = val;
+  }
+  return out;
+};
+
+const STRENGTH_LABEL: Record<string, string> = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'Strong' };
+const BODY_LABEL: Record<string, string> = { LIGHT: 'Light', MEDIUM: 'Medium', BOLD: 'Bold' };
 
 type Props = { unit: string };
 
@@ -22,77 +49,48 @@ export default function Dashboard({ unit }: Props) {
   const [beanId, setBeanId] = useState('');
   const [drinkType, setDrinkType] = useState(DRINK_TYPES[0]);
   const [form, setForm] = useState(defaultDrink);
-  const [coffeeVolumeInput, setCoffeeVolumeInput] = useState('');
-  const [milkVolumeInput, setMilkVolumeInput] = useState('');
   const [madeBy, setMadeBy] = useState(getDefaultName());
-  const [message, setMessage] = useState('');
   const [selectedDrink, setSelectedDrink] = useState<DrinkLog | null>(null);
   const recentNames = useMemo(() => getRecentNames(), []);
+  const toast = useToast();
+
   const beanById = useMemo(() => new Map(beans.map((bean) => [bean.id, bean])), [beans]);
-  const levelLabel: { strength: Record<string, string>; body: Record<string, string> } = {
-    strength: {
-      LOW: 'Low',
-      MEDIUM: 'Medium',
-      HIGH: 'Strong'
-    },
-    body: {
-      LIGHT: 'Low',
-      MEDIUM: 'Medium',
-      BOLD: 'Strong'
-    }
-  } as const;
+  const bean = beanById.get(beanId);
 
-  const getBeanLabel = (bean: Bean) => {
-    if (bean.roaster) {
-      return `${bean.roaster} — ${bean.name}`;
-    }
-    return bean.name;
-  };
-
+  const getBeanLabel = (b: Bean) => (b.roaster ? `${b.roaster} — ${b.name}` : b.name);
 
   useEffect(() => {
     const load = async () => {
-      const beansRes = await apiGet<Bean[]>('/api/beans');
-      const drinksRes = await apiGet<DrinkLog[]>('/api/drinks');
+      const [beansRes, drinksRes] = await Promise.all([
+        apiGet<Bean[]>('/api/beans'),
+        apiGet<DrinkLog[]>('/api/drinks')
+      ]);
       setBeans(beansRes);
       setDrinks(drinksRes);
-      if (beansRes[0]) {
-        setBeanId(beansRes[0].id);
-      }
+      if (beansRes[0]) setBeanId(beansRes[0].id);
     };
     load();
   }, []);
 
+  // Prefill settings when the bean or drink type changes: saved recipe first,
+  // then the last matching drink, then defaults. Ratings reset for a fresh log.
   useEffect(() => {
-    const formatVolumeInput = (volumeMl: number) =>
-      unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl);
-    setCoffeeVolumeInput(formatVolumeInput(form.coffee_volume_ml));
-    setMilkVolumeInput(formatVolumeInput(form.milk_volume_ml));
-  }, [form.coffee_volume_ml, form.milk_volume_ml, unit]);
+    if (!beanId) return;
+    const recipe = recipeForType(beanById.get(beanId), drinkType);
+    const lastDrink = drinks.find((d) => d.bean_id === beanId && d.drink_type === drinkType);
+    const base = recipe ?? (lastDrink ? extractSettings(lastDrink) : DEFAULT_SETTINGS);
+    setForm({ ...defaultDrink, ...base });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beanId, drinkType]);
 
-  const lastDrink = useMemo(() => {
-    return drinks.find((drink) => drink.bean_id === beanId && drink.drink_type === drinkType);
-  }, [drinks, beanId, drinkType]);
-
-  const applySettings = (settings: Partial<typeof defaultDrink>) => {
-    setForm((prev) => ({
-      ...prev,
-      ...settings
-    }));
-  };
-
-  const extractSettings = (drink: DrinkLog) => ({
-    temperature_level: drink.temperature_level,
-    body_level: drink.body_level,
-    order: drink.order,
-    coffee_volume_ml: drink.coffee_volume_ml,
-    milk_volume_ml: drink.milk_volume_ml,
-    strength_level: drink.strength_level,
-    grind_setting: drink.grind_setting
-  });
+  const currentSettings = (): RecipeSettings => extractSettings(form as unknown as RecipeSettings);
+  const hasRecipe = !!recipeForType(bean, drinkType);
 
   const handleSubmit = async () => {
-    if (!beanId) return;
+    if (!beanId) {
+      toast('Add a bean first', 'error');
+      return;
+    }
     const payload = {
       bean_id: beanId,
       drink_type: drinkType,
@@ -119,312 +117,183 @@ export default function Dashboard({ unit }: Props) {
     const created = await apiSend<DrinkLog>('/api/drinks', 'POST', payload);
     setDrinks((prev) => [created, ...prev]);
     addRecentName(madeBy);
-    setMessage('Saved!');
-    setTimeout(() => setMessage(''), 2000);
+    toast('Drink logged', 'success');
   };
 
-  const updateVolume = (field: 'coffee_volume_ml' | 'milk_volume_ml', value: string) => {
-    if (field === 'coffee_volume_ml') {
-      setCoffeeVolumeInput(value);
-    } else {
-      setMilkVolumeInput(value);
-    }
-
-    if (value.trim() === '') {
-      return;
-    }
-
-    const num = Number(value);
-    if (Number.isNaN(num)) {
-      return;
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      [field]: unit === 'oz' ? ozToMl(num) : num
-    }));
+  const handleSaveRecipe = async () => {
+    if (!beanId) return;
+    const recipe = await upsertRecipe(beanId, drinkType, currentSettings());
+    setBeans((prev) =>
+      prev.map((b) =>
+        b.id === beanId
+          ? { ...b, recipes: [...(b.recipes ?? []).filter((r) => r.drink_type !== drinkType), recipe] }
+          : b
+      )
+    );
+    toast(`Saved best ${drinkType} recipe`, 'success');
   };
 
-  const normalizeVolumeOnBlur = (field: 'coffee_volume_ml' | 'milk_volume_ml') => {
-    const value = field === 'coffee_volume_ml' ? coffeeVolumeInput : milkVolumeInput;
-    if (value.trim() !== '') {
-      return;
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      [field]: 0
-    }));
-  };
-
-  useEffect(() => {
-    if (lastDrink) {
-      applySettings(extractSettings(lastDrink));
-    }
-  }, [lastDrink]);
+  const topDrinks = drinks.filter((d) => d.overall_rating >= 4).slice(0, 5);
 
   return (
-    <div className="grid two">
-      <section className="card stack">
-        <div className="inline" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3>Fast Drink Entry</h3>
-          <span className="badge">KF7 ready</span>
-        </div>
-        <label className="stack">
-          <span className="label">Bean</span>
-          <select value={beanId} onChange={(event) => setBeanId(event.target.value)}>
-            {beans.map((bean) => (
-              <option key={bean.id} value={bean.id}>
-                {getBeanLabel(bean)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="stack">
-          <span className="label">Drink Type</span>
-          <div className="chip-row" role="tablist" aria-label="Drink Type">
-            {DRINK_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                role="tab"
-                aria-selected={drinkType === type}
-                className={drinkType === type ? 'chip active' : 'chip'}
-                onClick={() => setDrinkType(type)}
-              >
-                {type}
-              </button>
-            ))}
+    <div className="flex flex-col gap-5">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Log a drink</h1>
+        <p className="text-sm text-muted">Pick a bean and dial type — your saved recipe loads automatically.</p>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <section className="card flex flex-col gap-5 p-5">
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="field-label">Bean</span>
+              <select className="input" value={beanId} onChange={(e) => setBeanId(e.target.value)}>
+                {beans.length === 0 && <option value="">No beans yet</option>}
+                {beans.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {getBeanLabel(b)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="field-label">Made by</span>
+              <input className="input" list="names" value={madeBy} onChange={(e) => setMadeBy(e.target.value)} />
+              <datalist id="names">
+                {recentNames.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </label>
           </div>
-        </label>
-        <div className="label">Last drink settings are copied automatically.</div>
-        <div className="grid two">
-          <div className="stack">
-            <span className="label">Strength</span>
-            <SegmentedControl
-              value={form.strength_level}
-              ariaLabel="Strength level"
-              options={[
-                { value: 'LOW', label: 'Low' },
-                { value: 'MEDIUM', label: 'Medium' },
-                { value: 'HIGH', label: 'High' }
-              ]}
-              onChange={(value) => setForm({ ...form, strength_level: value })}
-            />
+
+          <div className="flex flex-col gap-1.5">
+            <span className="field-label">Drink type</span>
+            <ChipSelect ariaLabel="Drink type" options={DRINK_TYPES} value={drinkType} onChange={setDrinkType} />
           </div>
-          <div className="stack">
-            <span className="label">Temperature</span>
-            <SegmentedControl
-              value={form.temperature_level}
-              ariaLabel="Temperature level"
-              options={[
-                { value: 'LOW', label: 'Low' },
-                { value: 'MEDIUM', label: 'Medium' },
-                { value: 'HIGH', label: 'High' }
-              ]}
-              onChange={(value) => setForm({ ...form, temperature_level: value })}
-            />
-          </div>
-          <div className="stack">
-            <span className="label">Body</span>
-            <SegmentedControl
-              value={form.body_level}
-              ariaLabel="Body level"
-              options={[
-                { value: 'LIGHT', label: 'Low' },
-                { value: 'MEDIUM', label: 'Medium' },
-                { value: 'BOLD', label: 'Strong' }
-              ]}
-              onChange={(value) => setForm({ ...form, body_level: value })}
-            />
-          </div>
-          <div className="stack">
-            <span className="label">Order</span>
-            <SegmentedControl
-              value={form.order}
-              ariaLabel="Pour order"
-              options={[
-                { value: 'COFFEE_FIRST', label: 'Coffee First' },
-                { value: 'MILK_FIRST', label: 'Milk First' }
-              ]}
-              onChange={(value) => setForm({ ...form, order: value })}
-            />
-          </div>
-          <label className="stack">
-            <span className="label">Coffee Volume ({unit})</span>
-            <input
-              type="number"
-              min="0"
-              step={unit === 'oz' ? '0.1' : '2.957'}
-              value={coffeeVolumeInput}
-              onChange={(event) => updateVolume('coffee_volume_ml', event.target.value)}
-              onBlur={() => normalizeVolumeOnBlur('coffee_volume_ml')}
-            />
-          </label>
-          <label className="stack">
-            <span className="label">Milk Volume ({unit})</span>
-            <input
-              type="number"
-              min="0"
-              step={unit === 'oz' ? '0.1' : '2.957'}
-              value={milkVolumeInput}
-              onChange={(event) => updateVolume('milk_volume_ml', event.target.value)}
-              onBlur={() => normalizeVolumeOnBlur('milk_volume_ml')}
-            />
-          </label>
-          <label className="stack">
-            <span className="label">Grind (1-7)</span>
-            <div className="range-field">
-              <input
-                type="range"
-                min="1"
-                max="7"
-                value={form.grind_setting}
-                onChange={(event) => setForm({ ...form, grind_setting: Number(event.target.value) })}
-              />
-              <span className="range-value">{form.grind_setting}</span>
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="section-title">Recipe</span>
+              <span className="text-xs text-muted">
+                {hasRecipe ? 'Loaded from saved recipe' : 'Using last brew / defaults'}
+              </span>
             </div>
-          </label>
-        </div>
-        <div className="grid two">
-          <label className="stack">
-            <span className="label">Overall Rating</span>
-            <StarRating label="Overall Rating" value={form.overall_rating} onChange={(value) => setForm({ ...form, overall_rating: value })} />
-          </label>
-          <label className="stack">
-            <span className="label balance-label">
-              <span>Sour</span>
-              <span>Balanced</span>
-              <span>Bitter</span>
-            </span>
-            <SegmentedControl
-              value={String(form.balance)}
-              ariaLabel="Sour to bitter balance"
-              className="balance-scale"
-              hideLabels
-              options={[
-                { value: '1', label: 'Sour', ariaLabel: 'Sour' },
-                { value: '2', label: 'Leans Sour', ariaLabel: 'Leans Sour' },
-                { value: '3', label: 'Balanced', ariaLabel: 'Balanced' },
-                { value: '4', label: 'Leans Bitter', ariaLabel: 'Leans Bitter' },
-                { value: '5', label: 'Bitter', ariaLabel: 'Bitter' }
-              ]}
-              onChange={(value) => setForm({ ...form, balance: Number(value) })}
+            <RecipeControls value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} unit={unit} />
+            <button type="button" className="btn self-start" onClick={handleSaveRecipe} disabled={!beanId}>
+              <BookmarkPlus size={17} />
+              Save as best {drinkType} recipe
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-border pt-4">
+            <span className="section-title">Rating</span>
+            <RatingPanel value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
+          </div>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="field-label">Notes</span>
+            <textarea
+              className="input"
+              placeholder="Tasting notes, tweaks for next time…"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
           </label>
-        </div>
-        <div className="grid two">
-          <label className="stack">
-            <span className="label">Made By</span>
-            <input list="names" value={madeBy} onChange={(event) => setMadeBy(event.target.value)} />
-          </label>
-          <datalist id="names">
-            {recentNames.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-          <label className="stack">
-            <span className="label">Notes</span>
-            <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-          </label>
-        </div>
-        <button className="primary" onClick={handleSubmit}>
-          Save Drink
-        </button>
-        {message && <span className="label">{message}</span>}
-      </section>
-      <section className="stack">
-        <div className="card">
-          <h3>Recent Drinks</h3>
-          <div className="stack">
-            {drinks.slice(0, 5).map((drink) => (
-              <button key={drink.id} type="button" className="recent-drink-item" onClick={() => setSelectedDrink(drink)}>
-                <div>
-                  <div>
-                    {beanById.get(drink.bean_id) ? getBeanLabel(beanById.get(drink.bean_id) as Bean) : 'Unknown bean'}
+
+          <button className="btn btn-primary" onClick={handleSubmit}>
+            <Sparkles size={18} />
+            Log drink
+          </button>
+        </section>
+
+        <aside className="flex flex-col gap-5">
+          <section className="card p-5">
+            <h3 className="section-title mb-3">Recent drinks</h3>
+            <div className="flex flex-col gap-2">
+              {drinks.length === 0 && <p className="text-sm text-muted">No drinks logged yet.</p>}
+              {drinks.slice(0, 5).map((drink) => (
+                <button
+                  key={drink.id}
+                  type="button"
+                  className="card-muted flex items-start justify-between gap-3 p-3 text-left transition-transform hover:-translate-y-0.5"
+                  onClick={() => setSelectedDrink(drink)}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">{drink.drink_type}</div>
+                    <div className="truncate text-xs text-muted">
+                      {beanById.get(drink.bean_id) ? getBeanLabel(beanById.get(drink.bean_id) as Bean) : 'Unknown bean'}
+                    </div>
+                    <div className="mt-0.5 text-xs text-muted">
+                      {formatVolume(drink.coffee_volume_ml, unit)} · {STRENGTH_LABEL[drink.strength_level]} · G{drink.grind_setting}
+                    </div>
                   </div>
-                  <div>{drink.drink_type}</div>
-                  <div className="label">
-                    {formatVolume(drink.coffee_volume_ml, unit)} · Strength {levelLabel.strength[drink.strength_level]}
+                  <span className="badge badge-gold">★ {drink.overall_rating}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="card p-5">
+            <h3 className="section-title mb-3 flex items-center gap-2">
+              <Trophy size={18} className="text-gold" /> Hall of fame
+            </h3>
+            <div className="flex flex-col gap-2">
+              {topDrinks.length === 0 && <p className="text-sm text-muted">Rate a drink 4★+ to see it here.</p>}
+              {topDrinks.map((drink) => (
+                <div key={drink.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{drink.drink_type}</div>
+                    <div className="truncate text-xs text-muted">{drink.notes || 'No notes'}</div>
                   </div>
-                </div>
-                <span className="badge">{drink.overall_rating}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="card">
-          <h3>Hall of Fame (30 days)</h3>
-          <div className="stack">
-            {drinks
-              .filter((drink) => drink.overall_rating >= 4)
-              .slice(0, 5)
-              .map((drink) => (
-                <div key={drink.id} className="inline" style={{ justifyContent: 'space-between' }}>
-                  <div>
-                    <div>{drink.drink_type}</div>
-                    <div className="label">{drink.notes || 'No notes'}</div>
-                  </div>
-                  <span className="badge">{drink.overall_rating}</span>
+                  <span className="badge badge-gold">★ {drink.overall_rating}</span>
                 </div>
               ))}
-          </div>
-        </div>
-      </section>
+            </div>
+          </section>
+        </aside>
+      </div>
 
-      {selectedDrink && (
-        <div className="modal-overlay" role="presentation" onClick={() => setSelectedDrink(null)}>
-          <div className="card stack modal-card" role="dialog" aria-modal="true" aria-label="Drink details" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-header">
+      <Dialog open={!!selectedDrink} onOpenChange={(open) => !open && setSelectedDrink(null)}>
+        {selectedDrink && (
+          <DialogContent>
+            <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <h3 style={{ marginBottom: 4 }}>{selectedDrink.drink_type}</h3>
-                <div className="label">{beanById.get(selectedDrink.bean_id) ? getBeanLabel(beanById.get(selectedDrink.bean_id) as Bean) : 'Unknown bean'}</div>
+                <DialogTitle className="text-lg font-bold">{selectedDrink.drink_type}</DialogTitle>
+                <div className="text-sm text-muted">
+                  {beanById.get(selectedDrink.bean_id)
+                    ? getBeanLabel(beanById.get(selectedDrink.bean_id) as Bean)
+                    : 'Unknown bean'}
+                </div>
               </div>
-              <button type="button" onClick={() => setSelectedDrink(null)}>
-                Close
-              </button>
+              <DialogClose asChild>
+                <button className="btn btn-ghost !min-h-0 px-3 py-1.5">Close</button>
+              </DialogClose>
             </div>
-            <div className="details-grid">
-              <div>
-                <div className="label">Coffee volume</div>
-                <div className="detail-value">{formatVolume(selectedDrink.coffee_volume_ml, unit)}</div>
-              </div>
-              <div>
-                <div className="label">Milk volume</div>
-                <div className="detail-value">{formatVolume(selectedDrink.milk_volume_ml, unit)}</div>
-              </div>
-              <div>
-                <div className="label">Strength</div>
-                <div className="detail-value">{levelLabel.strength[selectedDrink.strength_level]}</div>
-              </div>
-              <div>
-                <div className="label">Temperature</div>
-                <div className="detail-value">{selectedDrink.temperature_level}</div>
-              </div>
-              <div>
-                <div className="label">Body</div>
-                <div className="detail-value">{levelLabel.body[selectedDrink.body_level]}</div>
-              </div>
-              <div>
-                <div className="label">Order</div>
-                <div className="detail-value">{selectedDrink.order.replace('_', ' ')}</div>
-              </div>
-              <div>
-                <div className="label">Grind</div>
-                <div className="detail-value">{selectedDrink.grind_setting}</div>
-              </div>
-              <div>
-                <div className="label">Rating</div>
-                <div className="detail-value">{selectedDrink.overall_rating}/5</div>
-              </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                ['Coffee', formatVolume(selectedDrink.coffee_volume_ml, unit)],
+                ['Milk', formatVolume(selectedDrink.milk_volume_ml, unit)],
+                ['Strength', STRENGTH_LABEL[selectedDrink.strength_level]],
+                ['Temperature', selectedDrink.temperature_level],
+                ['Body', BODY_LABEL[selectedDrink.body_level]],
+                ['Order', selectedDrink.order.replace('_', ' ')],
+                ['Grind', String(selectedDrink.grind_setting)],
+                ['Rating', `${selectedDrink.overall_rating}/5`]
+              ].map(([label, val]) => (
+                <div key={label} className="card-muted px-3 py-2">
+                  <div className="field-label">{label}</div>
+                  <div className="font-semibold">{val}</div>
+                </div>
+              ))}
             </div>
-            <div>
-              <div className="label">Notes</div>
-              <div>{selectedDrink.notes || 'No notes yet.'}</div>
+            <div className="mt-3">
+              <div className="field-label">Notes</div>
+              <p className="text-sm">{selectedDrink.notes || 'No notes yet.'}</p>
             </div>
-          </div>
-        </div>
-      )}
+          </DialogContent>
+        )}
+      </Dialog>
     </div>
   );
 }

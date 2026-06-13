@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Search, Star, RotateCcw } from 'lucide-react';
 import { apiGet } from '../utils/api';
 import { Bean, DrinkLog } from '../utils/types';
 import { formatVolume } from '../utils/units';
+import { mediaUrl } from '../utils/media';
+
+const STRENGTH_LABEL: Record<string, string> = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'Strong' };
 
 export default function Drinks({ unit }: { unit: string }) {
   const [drinks, setDrinks] = useState<DrinkLog[]>([]);
@@ -21,69 +25,106 @@ export default function Drinks({ unit }: { unit: string }) {
   }, []);
 
   const beanName = (beanId: string) => beans.find((bean) => bean.id === beanId)?.name || 'Unknown bean';
-  const uniqueTypes = Array.from(new Set(drinks.map((drink) => drink.drink_type)));
-  const filteredDrinks = drinks
-    .filter((drink) => (rating === 'all' ? true : drink.overall_rating >= Number(rating)))
-    .filter((drink) => (drinkType === 'all' ? true : drink.drink_type === drinkType))
-    .filter((drink) => {
-      if (!search.trim()) return true;
-      const query = search.toLowerCase();
-      return [drink.drink_type, drink.notes, beanName(drink.bean_id)].some((item) => (item || '').toLowerCase().includes(query));
-    })
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const uniqueTypes = useMemo(() => Array.from(new Set(drinks.map((d) => d.drink_type))), [drinks]);
+
+  const filtered = useMemo(
+    () =>
+      drinks
+        .filter((drink) => (rating === 'all' ? true : drink.overall_rating >= Number(rating)))
+        .filter((drink) => (drinkType === 'all' ? true : drink.drink_type === drinkType))
+        .filter((drink) => {
+          if (!search.trim()) return true;
+          const q = search.toLowerCase();
+          return [drink.drink_type, drink.notes, beanName(drink.bean_id)].some((item) =>
+            (item || '').toLowerCase().includes(q)
+          );
+        })
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [drinks, beans, search, rating, drinkType]
+  );
 
   return (
-    <section className="stack">
-      <div className="card stack">
-        <h3 style={{ marginBottom: 0 }}>Review Drink History</h3>
-        <div className="grid three">
-          <label className="stack">
-            <span className="label">Search</span>
-            <input
-              placeholder="Bean, drink type, or notes"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
-          <label className="stack">
-            <span className="label">Minimum Rating</span>
-            <select value={rating} onChange={(event) => setRating(event.target.value)}>
-              <option value="all">All Ratings</option>
-              <option value="4">4+ stars</option>
-              <option value="3">3+ stars</option>
-            </select>
-          </label>
-          <label className="stack">
-            <span className="label">Drink Type</span>
-            <select value={drinkType} onChange={(event) => setDrinkType(event.target.value)}>
-              <option value="all">All Types</option>
-              {uniqueTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+    <div className="flex flex-col gap-5">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Drinks</h1>
+        <p className="text-sm text-muted">Every brew you've logged, newest first.</p>
       </div>
-      {filteredDrinks.map((drink) => (
-        <div key={drink.id} className="card">
-          <div className="inline" style={{ justifyContent: 'space-between' }}>
-            <div>
-              <h3>{drink.drink_type}</h3>
-              <p className="label">
-                {beanName(drink.bean_id)} · {new Date(drink.created_at).toLocaleDateString()}
-              </p>
-              <p className="label">
-                {formatVolume(drink.coffee_volume_ml, unit)} · {drink.temperature_level} · Grind {drink.grind_setting}
-              </p>
-            </div>
-            <span className="badge">{drink.overall_rating}/5</span>
-          </div>
-          <p>{drink.notes || 'No notes yet.'}</p>
-          <Link to={`/drinks/${drink.id}`}>View / Edit</Link>
+
+      <div className="card grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto]">
+        <label className="relative">
+          <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            className="input pl-9"
+            placeholder="Search bean, type, or notes…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
+        <select className="input sm:w-40" value={rating} onChange={(e) => setRating(e.target.value)}>
+          <option value="all">All ratings</option>
+          <option value="5">5 stars</option>
+          <option value="4">4+ stars</option>
+          <option value="3">3+ stars</option>
+        </select>
+        <select className="input sm:w-44" value={drinkType} onChange={(e) => setDrinkType(e.target.value)}>
+          <option value="all">All types</option>
+          {uniqueTypes.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="card p-8 text-center text-muted">No drinks match your filters.</div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {filtered.map((drink) => {
+            const thumb = mediaUrl(drink.thumbnail_path);
+            return (
+              <Link
+                key={drink.id}
+                to={`/drinks/${drink.id}`}
+                className="card flex gap-3 overflow-hidden p-3 transition-transform hover:-translate-y-0.5"
+              >
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-surface-muted">
+                  {thumb ? (
+                    <img src={thumb} alt={drink.drink_type} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center text-lg font-bold text-muted">
+                      {drink.drink_type.slice(0, 1)}
+                    </div>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-bold leading-tight">{drink.drink_type}</h3>
+                      <p className="truncate text-xs text-muted">
+                        {beanName(drink.bean_id)} · {new Date(drink.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className="badge badge-gold shrink-0">
+                      <Star size={12} fill="currentColor" strokeWidth={0} /> {drink.overall_rating}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted">
+                    {formatVolume(drink.coffee_volume_ml, unit)} · {STRENGTH_LABEL[drink.strength_level]} · G
+                    {drink.grind_setting}
+                  </p>
+                  {drink.would_make_again && (
+                    <span className="mt-auto inline-flex w-fit items-center gap-1 text-xs font-semibold text-success">
+                      <RotateCcw size={12} /> Make again
+                    </span>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
         </div>
-      ))}
-    </section>
+      )}
+    </div>
   );
 }

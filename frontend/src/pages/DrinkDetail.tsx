@@ -1,264 +1,176 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { ArrowLeft, Trash2, BookmarkPlus, Upload } from 'lucide-react';
 import { apiGet, apiSend, uploadFile } from '../utils/api';
-import { Bean, DrinkLog } from '../utils/types';
+import { upsertRecipe } from '../utils/beanApi';
+import { Bean, DrinkLog, RecipeSettings } from '../utils/types';
 import { DRINK_TYPES } from '../utils/constants';
-import { ozToMl } from '../utils/units';
-import SegmentedControl from '../components/SegmentedControl';
-import StarRating from '../components/StarRating';
+import { mediaUrl } from '../utils/media';
+import ChipSelect from '../components/ChipSelect';
+import RecipeControls from '../components/RecipeControls';
+import RatingPanel from '../components/RatingPanel';
+import { useToast } from '../components/ui/Toast';
+import { Dialog, DialogContent, DialogTitle, DialogClose } from '../components/ui/Dialog';
+
+const extractSettings = (drink: DrinkLog): RecipeSettings => ({
+  temperature_level: drink.temperature_level,
+  body_level: drink.body_level,
+  order: drink.order,
+  coffee_volume_ml: drink.coffee_volume_ml,
+  milk_volume_ml: drink.milk_volume_ml,
+  strength_level: drink.strength_level,
+  grind_setting: drink.grind_setting
+});
 
 export default function DrinkDetail({ unit }: { unit: string }) {
   const { drinkId } = useParams();
   const navigate = useNavigate();
   const [drink, setDrink] = useState<DrinkLog | null>(null);
   const [beans, setBeans] = useState<Bean[]>([]);
-  const [coffeeVolumeInput, setCoffeeVolumeInput] = useState('');
-  const [milkVolumeInput, setMilkVolumeInput] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     if (!drinkId) return;
-    const load = async () => {
-      const drinkRes = await apiGet<DrinkLog>(`/api/drinks/${drinkId}`);
-      const beansRes = await apiGet<Bean[]>('/api/beans?include_archived=true');
-      setDrink(drinkRes);
-      setBeans(beansRes);
-    };
-    load();
+    apiGet<DrinkLog>(`/api/drinks/${drinkId}`).then(setDrink);
+    apiGet<Bean[]>('/api/beans?include_archived=true').then(setBeans);
   }, [drinkId]);
 
-  useEffect(() => {
-    if (!drink) return;
-    const formatVolumeInput = (volumeMl: number) =>
-      unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl);
-    setCoffeeVolumeInput(formatVolumeInput(drink.coffee_volume_ml));
-    setMilkVolumeInput(formatVolumeInput(drink.milk_volume_ml));
-  }, [drink?.coffee_volume_ml, drink?.milk_volume_ml, unit]);
+  if (!drink) return <div className="card p-6 text-muted">Loading…</div>;
 
-  const handleUpdate = async () => {
-    if (!drink || !drinkId) return;
+  const patch = (next: Partial<DrinkLog>) => setDrink((d) => (d ? { ...d, ...next } : d));
+
+  const handleSave = async () => {
     const updated = await apiSend<DrinkLog>(`/api/drinks/${drinkId}`, 'PUT', drink);
     setDrink(updated);
+    toast('Changes saved', 'success');
   };
 
   const handleDelete = async () => {
-    if (!drinkId) return;
-    if (!window.confirm('Delete this drink log?')) return;
     await apiSend(`/api/drinks/${drinkId}`, 'DELETE');
     navigate('/drinks');
   };
 
-  const handleUpload = async (file: File) => {
-    if (!drinkId) return;
-    const updated = await uploadFile<DrinkLog>(`/api/drinks/${drinkId}/photo`, file);
-    setDrink(updated);
+  const handleUpload = async (file?: File) => {
+    if (!file || !drinkId) return;
+    setDrink(await uploadFile<DrinkLog>(`/api/drinks/${drinkId}/photo`, file));
+    toast('Photo added', 'success');
   };
 
-  const updateVolume = (field: 'coffee_volume_ml' | 'milk_volume_ml', value: string) => {
-    if (!drink) return;
-
-    if (field === 'coffee_volume_ml') {
-      setCoffeeVolumeInput(value);
-    } else {
-      setMilkVolumeInput(value);
-    }
-
-    if (value.trim() === '') {
-      return;
-    }
-
-    const num = Number(value);
-    if (Number.isNaN(num)) {
-      return;
-    }
-
-    setDrink({
-      ...drink,
-      [field]: unit === 'oz' ? ozToMl(num) : num
-    });
+  const promoteToRecipe = async () => {
+    await upsertRecipe(drink.bean_id, drink.drink_type, extractSettings(drink), 'from_drink', drink.id);
+    toast(`Saved as ${drink.drink_type} recipe`, 'success');
   };
 
-  const normalizeVolumeOnBlur = (field: 'coffee_volume_ml' | 'milk_volume_ml') => {
-    if (!drink) return;
-    const value = field === 'coffee_volume_ml' ? coffeeVolumeInput : milkVolumeInput;
-    if (value.trim() !== '') {
-      return;
-    }
-
-    setDrink({
-      ...drink,
-      [field]: 0
-    });
-  };
-
-  if (!drink) {
-    return <div className="card">Loading...</div>;
-  }
+  const photo = mediaUrl(drink.photo_path);
 
   return (
-    <section className="card stack">
-      <div className="inline" style={{ justifyContent: 'space-between' }}>
-        <h3>Edit Drink</h3>
-        <div className="inline">
-          <button onClick={handleDelete}>Delete</button>
-          <button className="primary" onClick={handleUpdate}>
-            Save Changes
+    <div className="flex flex-col gap-5">
+      <Link to="/drinks" className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-text">
+        <ArrowLeft size={16} /> All drinks
+      </Link>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{drink.drink_type}</h1>
+          <p className="text-sm text-muted">{new Date(drink.created_at).toLocaleString()}</p>
+        </div>
+        <div className="flex gap-2">
+          <button className="btn btn-danger" onClick={() => setConfirmOpen(true)}>
+            <Trash2 size={16} /> Delete
+          </button>
+          <button className="btn btn-primary" onClick={handleSave}>
+            Save changes
           </button>
         </div>
       </div>
-      <div className="grid two">
-        <label className="stack">
-          <span className="label">Bean</span>
-          <select value={drink.bean_id} onChange={(event) => setDrink({ ...drink, bean_id: event.target.value })}>
-            {beans.map((bean) => (
-              <option key={bean.id} value={bean.id}>
-                {bean.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="stack">
-          <span className="label">Drink Type</span>
-          <div className="chip-row" role="tablist" aria-label="Drink Type">
-            {DRINK_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                role="tab"
-                aria-selected={drink.drink_type === type}
-                className={drink.drink_type === type ? 'chip active' : 'chip'}
-                onClick={() => setDrink({ ...drink, drink_type: type })}
-              >
-                {type}
-              </button>
-            ))}
+
+      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <section className="card flex flex-col gap-5 p-5">
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="field-label">Bean</span>
+              <select className="input" value={drink.bean_id} onChange={(e) => patch({ bean_id: e.target.value })}>
+                {beans.map((bean) => (
+                  <option key={bean.id} value={bean.id}>
+                    {bean.roaster ? `${bean.roaster} — ${bean.name}` : bean.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="field-label">Made by</span>
+              <input className="input" value={drink.made_by || ''} onChange={(e) => patch({ made_by: e.target.value })} />
+            </label>
           </div>
-        </label>
-      </div>
-      <div className="grid two">
-        <div className="stack">
-          <span className="label">Strength</span>
-          <SegmentedControl
-            value={drink.strength_level}
-            ariaLabel="Strength level"
-            options={[
-              { value: 'LOW', label: 'Low' },
-              { value: 'MEDIUM', label: 'Medium' },
-              { value: 'HIGH', label: 'High' }
-            ]}
-            onChange={(value) => setDrink({ ...drink, strength_level: value })}
-          />
-        </div>
-        <div className="stack">
-          <span className="label">Temperature</span>
-          <SegmentedControl
-            value={drink.temperature_level}
-            ariaLabel="Temperature level"
-            options={[
-              { value: 'LOW', label: 'Low' },
-              { value: 'MEDIUM', label: 'Medium' },
-              { value: 'HIGH', label: 'High' }
-            ]}
-            onChange={(value) => setDrink({ ...drink, temperature_level: value })}
-          />
-        </div>
-        <div className="stack">
-          <span className="label">Body</span>
-          <SegmentedControl
-            value={drink.body_level}
-            ariaLabel="Body level"
-            options={[
-              { value: 'LIGHT', label: 'Light' },
-              { value: 'MEDIUM', label: 'Medium' },
-              { value: 'BOLD', label: 'Bold' }
-            ]}
-            onChange={(value) => setDrink({ ...drink, body_level: value })}
-          />
-        </div>
-        <div className="stack">
-          <span className="label">Order</span>
-          <SegmentedControl
-            value={drink.order}
-            ariaLabel="Pour order"
-            options={[
-              { value: 'COFFEE_FIRST', label: 'Coffee First' },
-              { value: 'MILK_FIRST', label: 'Milk First' }
-            ]}
-            onChange={(value) => setDrink({ ...drink, order: value })}
-          />
-        </div>
-        <label className="stack">
-          <span className="label">Coffee Volume ({unit})</span>
-          <input
-            type="number"
-            value={coffeeVolumeInput}
-            onChange={(event) => updateVolume('coffee_volume_ml', event.target.value)}
-            onBlur={() => normalizeVolumeOnBlur('coffee_volume_ml')}
-          />
-        </label>
-        <label className="stack">
-          <span className="label">Milk Volume ({unit})</span>
-          <input
-            type="number"
-            value={milkVolumeInput}
-            onChange={(event) => updateVolume('milk_volume_ml', event.target.value)}
-            onBlur={() => normalizeVolumeOnBlur('milk_volume_ml')}
-          />
-        </label>
-        <label className="stack">
-          <span className="label">Grind (1-7)</span>
-          <div className="range-field">
-            <input
-              type="range"
-              min="1"
-              max="7"
-              value={drink.grind_setting}
-              onChange={(event) => setDrink({ ...drink, grind_setting: Number(event.target.value) })}
+
+          <div className="flex flex-col gap-1.5">
+            <span className="field-label">Drink type</span>
+            <ChipSelect
+              ariaLabel="Drink type"
+              options={DRINK_TYPES}
+              value={drink.drink_type}
+              onChange={(drink_type) => patch({ drink_type })}
             />
-            <span className="range-value">{drink.grind_setting}</span>
           </div>
-        </label>
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="section-title">Recipe</span>
+              <button className="btn !min-h-0 px-3 py-1.5 text-xs" onClick={promoteToRecipe}>
+                <BookmarkPlus size={15} /> Save as bean recipe
+              </button>
+            </div>
+            <RecipeControls value={drink} onChange={patch} unit={unit} />
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-border pt-4">
+            <span className="section-title">Rating</span>
+            <RatingPanel value={drink} onChange={patch} />
+          </div>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="field-label">Notes</span>
+            <textarea className="input" value={drink.notes || ''} onChange={(e) => patch({ notes: e.target.value })} />
+          </label>
+        </section>
+
+        <aside className="card flex h-fit flex-col gap-3 p-5">
+          <h3 className="section-title">Photo</h3>
+          <div className="aspect-square w-full overflow-hidden rounded-xl bg-surface-muted">
+            {photo ? (
+              <img src={photo} alt={drink.drink_type} className="h-full w-full object-cover" />
+            ) : (
+              <div className="grid h-full w-full place-items-center text-muted">No photo yet</div>
+            )}
+          </div>
+          <label className="btn cursor-pointer justify-center">
+            <Upload size={16} /> {photo ? 'Replace photo' : 'Add photo'}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handleUpload(e.target.files?.[0])}
+            />
+          </label>
+        </aside>
       </div>
-      <div className="grid two">
-        <label className="stack">
-          <span className="label">Overall Rating</span>
-          <StarRating
-            label="Overall Rating"
-            value={drink.overall_rating}
-            onChange={(value) => setDrink({ ...drink, overall_rating: value })}
-          />
-        </label>
-        <label className="stack">
-          <span className="label balance-label">Sour · Balanced · Bitter</span>
-          <SegmentedControl
-            value={String(drink.balance)}
-            ariaLabel="Sour to bitter balance"
-            className="balance-scale"
-            hideLabels
-            options={[
-              { value: '1', label: 'Sour', ariaLabel: 'Sour' },
-              { value: '2', label: 'Leans Sour', ariaLabel: 'Leans Sour' },
-              { value: '3', label: 'Balanced', ariaLabel: 'Balanced' },
-              { value: '4', label: 'Leans Bitter', ariaLabel: 'Leans Bitter' },
-              { value: '5', label: 'Bitter', ariaLabel: 'Bitter' }
-            ]}
-            onChange={(value) => setDrink({ ...drink, balance: Number(value) })}
-          />
-        </label>
-      </div>
-      <div className="grid two">
-        <label className="stack">
-          <span className="label">Made By</span>
-          <input value={drink.made_by || ''} onChange={(event) => setDrink({ ...drink, made_by: event.target.value })} />
-        </label>
-        <label className="stack">
-          <span className="label">Notes</span>
-          <textarea value={drink.notes || ''} onChange={(event) => setDrink({ ...drink, notes: event.target.value })} />
-        </label>
-      </div>
-      <label className="stack">
-        <span className="label">Photo</span>
-        <input type="file" onChange={(event) => event.target.files?.[0] && handleUpload(event.target.files[0])} />
-      </label>
-    </section>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogTitle className="text-lg font-bold">Delete this drink?</DialogTitle>
+          <p className="mt-2 text-sm text-muted">This permanently removes the log and its photo.</p>
+          <div className="mt-5 flex justify-end gap-2">
+            <DialogClose asChild>
+              <button className="btn">Cancel</button>
+            </DialogClose>
+            <button className="btn btn-danger" onClick={handleDelete}>
+              Delete
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
