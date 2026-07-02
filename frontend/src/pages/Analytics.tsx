@@ -2,16 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../utils/api';
 import { Bean, DrinkLog } from '../utils/types';
 import { DOSE_G_BY_STRENGTH } from '../utils/constants';
+import { beanCostPerDrink, drinkCost, formatMoney } from '../utils/cost';
 import { LineChart, Line, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 
 const ACCENT = '#9c6b4f';
-
-/** Estimated bean cost of one drink, or null when the bean has no price/size. */
-const drinkCost = (drink: DrinkLog, bean: Bean | undefined): number | null => {
-  if (!bean?.price || !bean.bag_size_g) return null;
-  const dose = DOSE_G_BY_STRENGTH[drink.strength_level] ?? DOSE_G_BY_STRENGTH.MEDIUM;
-  return (bean.price / bean.bag_size_g) * dose;
-};
 
 export default function Analytics() {
   const [drinks, setDrinks] = useState<DrinkLog[]>([]);
@@ -90,16 +84,14 @@ export default function Analytics() {
   const costByBean = useMemo(
     () =>
       beans
-        .filter((bean) => bean.price && bean.bag_size_g)
-        .map((bean) => ({
-          name: bean.name,
-          cost: Number((((bean.price as number) / (bean.bag_size_g as number)) * DOSE_G_BY_STRENGTH.MEDIUM).toFixed(2))
-        }))
+        .map((bean) => ({ name: bean.name, cost: beanCostPerDrink(bean) }))
+        .filter((entry): entry is { name: string; cost: number } => entry.cost !== null)
+        .map((entry) => ({ ...entry, cost: Number(entry.cost.toFixed(2)) }))
         .sort((a, b) => b.cost - a.cost),
     [beans]
   );
 
-  const money = (value: number) => `$${value.toFixed(2)}`;
+  const money = formatMoney;
 
   return (
     <div className="stack">

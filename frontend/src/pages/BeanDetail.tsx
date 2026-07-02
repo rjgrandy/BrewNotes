@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { apiGet, apiSend, uploadFile } from '../utils/api';
 import { Bean, BeanAnalytics, BeanBestSettings, RecommendedSettings } from '../utils/types';
 import { formatVolume, inputMatchesMl, inputToMl, volumeToInput } from '../utils/units';
+import { beanCostPerDrink, formatMoney } from '../utils/cost';
 import PhotoField from '../components/PhotoField';
 import {
   ScatterChart,
@@ -153,10 +154,36 @@ export default function BeanDetail({ unit }: Props) {
             <input value={form.tasting_notes || ''} onChange={(event) => setForm({ ...form, tasting_notes: event.target.value })} />
           </label>
           <label className="stack">
+            <span className="label">Bag Size (g)</span>
+            <input
+              type="number"
+              min="0"
+              value={form.bag_size_g ?? ''}
+              onChange={(event) =>
+                setForm({ ...form, bag_size_g: event.target.value === '' ? null : Number(event.target.value) })
+              }
+            />
+          </label>
+          <label className="stack">
+            <span className="label">Price ($)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.price ?? ''}
+              onChange={(event) =>
+                setForm({ ...form, price: event.target.value === '' ? null : Number(event.target.value) })
+              }
+            />
+          </label>
+          <label className="stack">
             <span className="label">Notes</span>
             <textarea value={form.notes || ''} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           </label>
         </div>
+        {beanCostPerDrink(form as Bean) !== null && (
+          <p className="label">≈ {formatMoney(beanCostPerDrink(form as Bean) as number)} per medium-strength drink</p>
+        )}
         <div className="card stack sub-card">
           <h4 style={{ margin: 0 }}>Best Espresso Settings</h4>
           <div className="grid two">

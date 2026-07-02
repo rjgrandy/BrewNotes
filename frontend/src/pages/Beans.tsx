@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { apiGet, apiSend, uploadFile } from '../utils/api';
 import { Bean } from '../utils/types';
 import { formatVolume, inputToMl, volumeToInput } from '../utils/units';
+import { beanCostPerDrink, formatMoney } from '../utils/cost';
 import ImageEditor from '../components/ImageEditor';
 
 const emptyBean = {
@@ -155,7 +156,7 @@ export default function Beans({ unit }: Props) {
             />
           </label>
           <label className="stack">
-            <span className="label">Price</span>
+            <span className="label">Price ($)</span>
             <input
               type="number"
               min="0"
@@ -320,6 +321,9 @@ export default function Beans({ unit }: Props) {
                   {formatVolume(Number(bean.current_best_settings.coffee_volume_ml || 0), unit)}
                 </p>
               )}
+              {beanCostPerDrink(bean) !== null && (
+                <p className="label">≈ {formatMoney(beanCostPerDrink(bean) as number)} per drink</p>
+              )}
               <Link to={`/beans/${bean.id}`}>View</Link>
             </div>
           ))}
@@ -334,6 +338,7 @@ export default function Beans({ unit }: Props) {
                 <th align="left">Roaster</th>
                 <th align="left">Origin</th>
                 <th align="left">Best Espresso</th>
+                <th align="left">Cost / Drink</th>
                 <th align="left">Status</th>
               </tr>
             </thead>
@@ -357,6 +362,7 @@ export default function Beans({ unit }: Props) {
                       ? `G${String(bean.current_best_settings.grind_setting || '-')}, ${formatVolume(Number(bean.current_best_settings.coffee_volume_ml || 0), unit)}`
                       : 'Not set'}
                   </td>
+                  <td>{beanCostPerDrink(bean) !== null ? `≈ ${formatMoney(beanCostPerDrink(bean) as number)}` : '—'}</td>
                   <td>{bean.archived ? 'Archived' : 'Active'}</td>
                 </tr>
               ))}
