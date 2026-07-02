@@ -417,7 +417,7 @@ export default function Dashboard({ unit }: Props) {
             <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           </label>
         </div>
-        <button className="primary" onClick={handleSubmit} disabled={!beanId || saving}>
+        <button className="primary save-sticky" onClick={handleSubmit} disabled={!beanId || saving}>
           {saving ? 'Saving…' : 'Save Drink'}
         </button>
         {message && <span className="label">{message}</span>}

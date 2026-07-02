@@ -19,6 +19,14 @@ export const DEFAULT_SETTINGS = {
   grind_setting: 4
 };
 
+// Approximate grams of beans the KF7 doses per drink at each strength level.
+// Used only for cost estimates.
+export const DOSE_G_BY_STRENGTH: Record<string, number> = {
+  LOW: 8,
+  MEDIUM: 11,
+  HIGH: 14
+};
+
 export const DEFAULT_RATINGS = {
   overall_rating: 3,
   sweetness: 3,

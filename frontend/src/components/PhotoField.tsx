@@ -12,6 +12,7 @@ type Props = {
 
 export default function PhotoField({ label, photoUrl, thumbnailUrl, editorTitle, onSave }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -50,8 +51,11 @@ export default function PhotoField({ label, photoUrl, thumbnailUrl, editorTitle,
             ☕
           </div>
         )}
+        <button type="button" onClick={() => cameraRef.current?.click()} disabled={busy}>
+          {busy ? 'Uploading…' : 'Take Photo'}
+        </button>
         <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}>
-          {busy ? 'Uploading…' : displayUrl ? 'Change Photo' : 'Add Photo'}
+          {displayUrl ? 'Change Photo' : 'Choose Photo'}
         </button>
       </div>
       {error && <span className="label error-text">{error}</span>}
@@ -59,6 +63,17 @@ export default function PhotoField({ label, photoUrl, thumbnailUrl, editorTitle,
         ref={inputRef}
         type="file"
         accept="image/*"
+        hidden
+        onChange={(event) => {
+          handleFile(event.target.files?.[0]);
+          event.target.value = '';
+        }}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         hidden
         onChange={(event) => {
           handleFile(event.target.files?.[0]);
