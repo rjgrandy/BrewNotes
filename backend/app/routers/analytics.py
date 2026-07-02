@@ -21,7 +21,7 @@ def global_analytics(db: Session = Depends(get_db)) -> dict:
     hall_of_fame = (
         db.query(DrinkLog)
         .filter(DrinkLog.created_at >= func.datetime("now", "-30 days"))
-        .order_by(DrinkLog.overall_rating.desc())
+        .order_by(DrinkLog.overall_rating.desc(), DrinkLog.created_at.desc())
         .limit(5)
         .all()
     )

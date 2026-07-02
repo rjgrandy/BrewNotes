@@ -1,11 +1,13 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from .utils import to_web_path
 
 
 class BeanBase(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=200)
     roaster: str | None = None
     origin: str | None = None
     process: str | None = None
@@ -13,12 +15,20 @@ class BeanBase(BaseModel):
     tasting_notes: str | None = None
     roast_date: date | None = None
     open_date: date | None = None
-    bag_size_g: int | None = None
-    price: float | None = None
+    bag_size_g: int | None = Field(default=None, ge=0)
+    price: float | None = Field(default=None, ge=0)
     decaf: bool = False
     notes: str | None = None
     archived: bool = False
     current_best_settings: dict | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Name cannot be blank")
+        return value
 
 
 class BeanCreate(BeanBase):
@@ -26,8 +36,7 @@ class BeanCreate(BeanBase):
 
 
 class BeanUpdate(BeanBase):
-    image_path: str | None = None
-    thumbnail_path: str | None = None
+    pass
 
 
 class BeanOut(BeanBase):
@@ -37,29 +46,34 @@ class BeanOut(BeanBase):
     created_at: datetime
     updated_at: datetime
 
+    @field_validator("image_path", "thumbnail_path")
+    @classmethod
+    def normalize_paths(cls, value: str | None) -> str | None:
+        return to_web_path(value)
+
     class Config:
         from_attributes = True
 
 
 class DrinkLogBase(BaseModel):
     bean_id: str
-    drink_type: str
+    drink_type: str = Field(min_length=1, max_length=100)
     custom_label: str | None = None
     made_by: str | None = None
     rated_by: str | None = None
     temperature_level: str
     body_level: str
     order: str
-    coffee_volume_ml: float
-    milk_volume_ml: float
+    coffee_volume_ml: float = Field(ge=0, le=1000)
+    milk_volume_ml: float = Field(ge=0, le=1000)
     strength_level: str
-    grind_setting: int
-    overall_rating: int
-    sweetness: int
-    bitterness: int
-    acidity: int
-    body_mouthfeel: int
-    balance: int
+    grind_setting: int = Field(ge=1, le=7)
+    overall_rating: int = Field(ge=1, le=5)
+    sweetness: int = Field(ge=1, le=5)
+    bitterness: int = Field(ge=1, le=5)
+    acidity: int = Field(ge=1, le=5)
+    body_mouthfeel: int = Field(ge=1, le=5)
+    balance: int = Field(ge=1, le=5)
     would_make_again: bool = False
     dialed_in: bool = False
     notes: str | None = None
@@ -70,8 +84,7 @@ class DrinkLogCreate(DrinkLogBase):
 
 
 class DrinkLogUpdate(DrinkLogBase):
-    photo_path: str | None = None
-    thumbnail_path: str | None = None
+    pass
 
 
 class DrinkLogOut(DrinkLogBase):
@@ -79,6 +92,11 @@ class DrinkLogOut(DrinkLogBase):
     created_at: datetime
     photo_path: str | None = None
     thumbnail_path: str | None = None
+
+    @field_validator("photo_path", "thumbnail_path")
+    @classmethod
+    def normalize_paths(cls, value: str | None) -> str | None:
+        return to_web_path(value)
 
     class Config:
         from_attributes = True

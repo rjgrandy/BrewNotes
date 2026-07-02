@@ -9,7 +9,8 @@ BrewNotes is a self-hosted coffee and espresso logging app designed for fast dai
 - **Full KF7 settings** support (strength, temperature, body, order, volumes, grind).
 - **Attribution** for “Made by” and “Rated by” with recent names.
 - **Analytics dashboard** with Recharts graphs.
-- **Photo management** with thumbnails.
+- **Photo management** with thumbnails and a built-in editor (crop, zoom, rotate) for bean and drink photos.
+- **oz/ml unit toggle** persisted per device.
 - **PWA support** for quick home screen access.
 - **Export/backup endpoints** including JSON, CSV, and ZIP with uploads.
 

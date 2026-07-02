@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { apiGet, apiSend, uploadFile } from '../utils/api';
 import { Bean, DrinkLog } from '../utils/types';
 import { DRINK_TYPES } from '../utils/constants';
-import { ozToMl } from '../utils/units';
+import { inputMatchesMl, inputToMl, volumeToInput } from '../utils/units';
 import SegmentedControl from '../components/SegmentedControl';
 import StarRating from '../components/StarRating';
+import PhotoField from '../components/PhotoField';
 
 export default function DrinkDetail({ unit }: { unit: string }) {
   const { drinkId } = useParams();
@@ -14,30 +15,47 @@ export default function DrinkDetail({ unit }: { unit: string }) {
   const [beans, setBeans] = useState<Bean[]>([]);
   const [coffeeVolumeInput, setCoffeeVolumeInput] = useState('');
   const [milkVolumeInput, setMilkVolumeInput] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!drinkId) return;
     const load = async () => {
-      const drinkRes = await apiGet<DrinkLog>(`/api/drinks/${drinkId}`);
-      const beansRes = await apiGet<Bean[]>('/api/beans?include_archived=true');
-      setDrink(drinkRes);
-      setBeans(beansRes);
+      try {
+        const [drinkRes, beansRes] = await Promise.all([
+          apiGet<DrinkLog>(`/api/drinks/${drinkId}`),
+          apiGet<Bean[]>('/api/beans?include_archived=true')
+        ]);
+        setDrink(drinkRes);
+        setBeans(beansRes);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not load drink');
+      }
     };
     load();
   }, [drinkId]);
 
   useEffect(() => {
     if (!drink) return;
-    const formatVolumeInput = (volumeMl: number) =>
-      unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl);
-    setCoffeeVolumeInput(formatVolumeInput(drink.coffee_volume_ml));
-    setMilkVolumeInput(formatVolumeInput(drink.milk_volume_ml));
+    setCoffeeVolumeInput((prev) =>
+      inputMatchesMl(prev, drink.coffee_volume_ml, unit) ? prev : volumeToInput(drink.coffee_volume_ml, unit)
+    );
+    setMilkVolumeInput((prev) =>
+      inputMatchesMl(prev, drink.milk_volume_ml, unit) ? prev : volumeToInput(drink.milk_volume_ml, unit)
+    );
   }, [drink?.coffee_volume_ml, drink?.milk_volume_ml, unit]);
 
   const handleUpdate = async () => {
     if (!drink || !drinkId) return;
-    const updated = await apiSend<DrinkLog>(`/api/drinks/${drinkId}`, 'PUT', drink);
-    setDrink(updated);
+    setError('');
+    try {
+      const updated = await apiSend<DrinkLog>(`/api/drinks/${drinkId}`, 'PUT', drink);
+      setDrink(updated);
+      setMessage('Saved!');
+      setTimeout(() => setMessage(''), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save changes');
+    }
   };
 
   const handleDelete = async () => {
@@ -47,9 +65,9 @@ export default function DrinkDetail({ unit }: { unit: string }) {
     navigate('/drinks');
   };
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (blob: Blob) => {
     if (!drinkId) return;
-    const updated = await uploadFile<DrinkLog>(`/api/drinks/${drinkId}/photo`, file);
+    const updated = await uploadFile<DrinkLog>(`/api/drinks/${drinkId}/photo`, blob);
     setDrink(updated);
   };
 
@@ -62,18 +80,14 @@ export default function DrinkDetail({ unit }: { unit: string }) {
       setMilkVolumeInput(value);
     }
 
-    if (value.trim() === '') {
-      return;
-    }
-
-    const num = Number(value);
-    if (Number.isNaN(num)) {
+    const ml = inputToMl(value, unit);
+    if (ml === null) {
       return;
     }
 
     setDrink({
       ...drink,
-      [field]: unit === 'oz' ? ozToMl(num) : num
+      [field]: ml
     });
   };
 
@@ -91,7 +105,7 @@ export default function DrinkDetail({ unit }: { unit: string }) {
   };
 
   if (!drink) {
-    return <div className="card">Loading...</div>;
+    return <div className="card">{error || 'Loading...'}</div>;
   }
 
   return (
@@ -105,6 +119,8 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           </button>
         </div>
       </div>
+      {message && <span className="label">{message}</span>}
+      {error && <span className="label error-text">{error}</span>}
       <div className="grid two">
         <label className="stack">
           <span className="label">Bean</span>
@@ -190,6 +206,8 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           <span className="label">Coffee Volume ({unit})</span>
           <input
             type="number"
+            min="0"
+            step={unit === 'oz' ? '0.1' : '5'}
             value={coffeeVolumeInput}
             onChange={(event) => updateVolume('coffee_volume_ml', event.target.value)}
             onBlur={() => normalizeVolumeOnBlur('coffee_volume_ml')}
@@ -199,6 +217,8 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           <span className="label">Milk Volume ({unit})</span>
           <input
             type="number"
+            min="0"
+            step={unit === 'oz' ? '0.1' : '5'}
             value={milkVolumeInput}
             onChange={(event) => updateVolume('milk_volume_ml', event.target.value)}
             onBlur={() => normalizeVolumeOnBlur('milk_volume_ml')}
@@ -255,10 +275,13 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           <textarea value={drink.notes || ''} onChange={(event) => setDrink({ ...drink, notes: event.target.value })} />
         </label>
       </div>
-      <label className="stack">
-        <span className="label">Photo</span>
-        <input type="file" onChange={(event) => event.target.files?.[0] && handleUpload(event.target.files[0])} />
-      </label>
+      <PhotoField
+        label="Drink Photo"
+        photoUrl={drink.photo_path}
+        thumbnailUrl={drink.thumbnail_path}
+        editorTitle="Edit Drink Photo"
+        onSave={handleUpload}
+      />
     </section>
   );
 }

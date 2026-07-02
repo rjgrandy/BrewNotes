@@ -19,10 +19,12 @@ export default function Analytics() {
       acc[day].ratings.push(drink.overall_rating);
       return acc;
     }, {} as Record<string, { day: string; ratings: number[] }> )
-  ).map((entry) => ({
-    day: entry.day,
-    average: entry.ratings.reduce((sum, val) => sum + val, 0) / entry.ratings.length
-  }));
+  )
+    .map((entry) => ({
+      day: entry.day,
+      average: entry.ratings.reduce((sum, val) => sum + val, 0) / entry.ratings.length
+    }))
+    .sort((a, b) => a.day.localeCompare(b.day));
 
   const byMaker = Object.values(
     drinks.reduce((acc, drink) => {
@@ -33,7 +35,7 @@ export default function Analytics() {
       acc[maker].total += 1;
       return acc;
     }, {} as Record<string, { maker: string; total: number }>)
-  );
+  ).sort((a, b) => b.total - a.total);
 
   return (
     <div className="grid two">

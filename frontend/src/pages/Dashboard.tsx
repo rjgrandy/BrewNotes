@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiGet, apiSend } from '../utils/api';
 import { Bean, DrinkLog } from '../utils/types';
 import { DEFAULT_RATINGS, DEFAULT_SETTINGS, DRINK_TYPES } from '../utils/constants';
-import { formatVolume, ozToMl } from '../utils/units';
+import { formatVolume, inputMatchesMl, inputToMl, volumeToInput } from '../utils/units';
 import { addRecentName, getDefaultName, getRecentNames } from '../utils/attribution';
 import SegmentedControl from '../components/SegmentedControl';
 import StarRating from '../components/StarRating';
@@ -16,6 +17,8 @@ const defaultDrink = {
 
 type Props = { unit: string };
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 export default function Dashboard({ unit }: Props) {
   const [beans, setBeans] = useState<Bean[]>([]);
   const [drinks, setDrinks] = useState<DrinkLog[]>([]);
@@ -26,6 +29,8 @@ export default function Dashboard({ unit }: Props) {
   const [milkVolumeInput, setMilkVolumeInput] = useState('');
   const [madeBy, setMadeBy] = useState(getDefaultName());
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [selectedDrink, setSelectedDrink] = useState<DrinkLog | null>(null);
   const recentNames = useMemo(() => getRecentNames(), []);
   const beanById = useMemo(() => new Map(beans.map((bean) => [bean.id, bean])), [beans]);
@@ -49,25 +54,34 @@ export default function Dashboard({ unit }: Props) {
     return bean.name;
   };
 
-
   useEffect(() => {
     const load = async () => {
-      const beansRes = await apiGet<Bean[]>('/api/beans');
-      const drinksRes = await apiGet<DrinkLog[]>('/api/drinks');
-      setBeans(beansRes);
-      setDrinks(drinksRes);
-      if (beansRes[0]) {
-        setBeanId(beansRes[0].id);
+      try {
+        const [beansRes, drinksRes] = await Promise.all([
+          apiGet<Bean[]>('/api/beans'),
+          apiGet<DrinkLog[]>('/api/drinks')
+        ]);
+        setBeans(beansRes);
+        setDrinks(drinksRes);
+        if (beansRes[0]) {
+          setBeanId(beansRes[0].id);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not load data');
       }
     };
     load();
   }, []);
 
+  // Keep the volume inputs in sync with the form, but never clobber a value
+  // the user is mid-way through typing (e.g. "1." on the way to "1.5").
   useEffect(() => {
-    const formatVolumeInput = (volumeMl: number) =>
-      unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl);
-    setCoffeeVolumeInput(formatVolumeInput(form.coffee_volume_ml));
-    setMilkVolumeInput(formatVolumeInput(form.milk_volume_ml));
+    setCoffeeVolumeInput((prev) =>
+      inputMatchesMl(prev, form.coffee_volume_ml, unit) ? prev : volumeToInput(form.coffee_volume_ml, unit)
+    );
+    setMilkVolumeInput((prev) =>
+      inputMatchesMl(prev, form.milk_volume_ml, unit) ? prev : volumeToInput(form.milk_volume_ml, unit)
+    );
   }, [form.coffee_volume_ml, form.milk_volume_ml, unit]);
 
   const lastDrink = useMemo(() => {
@@ -91,8 +105,28 @@ export default function Dashboard({ unit }: Props) {
     grind_setting: drink.grind_setting
   });
 
+  useEffect(() => {
+    if (lastDrink) {
+      applySettings(extractSettings(lastDrink));
+      return;
+    }
+    // No history for this bean + drink combo yet: start from the bean's saved
+    // best espresso settings when available.
+    const best = beanById.get(beanId)?.current_best_settings;
+    if (best) {
+      applySettings({
+        ...(best.temperature_level ? { temperature_level: best.temperature_level } : {}),
+        ...(best.strength_level ? { strength_level: best.strength_level } : {}),
+        ...(best.grind_setting ? { grind_setting: best.grind_setting } : {}),
+        ...(best.coffee_volume_ml ? { coffee_volume_ml: best.coffee_volume_ml } : {})
+      });
+    }
+  }, [lastDrink, beanId, beanById]);
+
   const handleSubmit = async () => {
-    if (!beanId) return;
+    if (!beanId || saving) return;
+    setSaving(true);
+    setError('');
     const payload = {
       bean_id: beanId,
       drink_type: drinkType,
@@ -116,11 +150,18 @@ export default function Dashboard({ unit }: Props) {
       dialed_in: form.dialed_in,
       notes: form.notes
     };
-    const created = await apiSend<DrinkLog>('/api/drinks', 'POST', payload);
-    setDrinks((prev) => [created, ...prev]);
-    addRecentName(madeBy);
-    setMessage('Saved!');
-    setTimeout(() => setMessage(''), 2000);
+    try {
+      const created = await apiSend<DrinkLog>('/api/drinks', 'POST', payload);
+      setDrinks((prev) => [created, ...prev]);
+      addRecentName(madeBy);
+      setForm((prev) => ({ ...prev, notes: '', custom_label: '' }));
+      setMessage('Saved!');
+      setTimeout(() => setMessage(''), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save drink');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateVolume = (field: 'coffee_volume_ml' | 'milk_volume_ml', value: string) => {
@@ -130,18 +171,14 @@ export default function Dashboard({ unit }: Props) {
       setMilkVolumeInput(value);
     }
 
-    if (value.trim() === '') {
-      return;
-    }
-
-    const num = Number(value);
-    if (Number.isNaN(num)) {
+    const ml = inputToMl(value, unit);
+    if (ml === null) {
       return;
     }
 
     setForm((prev) => ({
       ...prev,
-      [field]: unit === 'oz' ? ozToMl(num) : num
+      [field]: ml
     }));
   };
 
@@ -157,11 +194,15 @@ export default function Dashboard({ unit }: Props) {
     }));
   };
 
-  useEffect(() => {
-    if (lastDrink) {
-      applySettings(extractSettings(lastDrink));
-    }
-  }, [lastDrink]);
+  const hallOfFame = useMemo(() => {
+    const cutoff = Date.now() - THIRTY_DAYS_MS;
+    return drinks
+      .filter((drink) => drink.overall_rating >= 4 && new Date(drink.created_at).getTime() >= cutoff)
+      .sort(
+        (a, b) => b.overall_rating - a.overall_rating || b.created_at.localeCompare(a.created_at)
+      )
+      .slice(0, 5);
+  }, [drinks]);
 
   return (
     <div className="grid two">
@@ -170,6 +211,11 @@ export default function Dashboard({ unit }: Props) {
           <h3>Fast Drink Entry</h3>
           <span className="badge">KF7 ready</span>
         </div>
+        {beans.length === 0 && (
+          <p className="label">
+            No beans yet — <Link to="/beans">add your first bean</Link> to start logging drinks.
+          </p>
+        )}
         <label className="stack">
           <span className="label">Bean</span>
           <select value={beanId} onChange={(event) => setBeanId(event.target.value)}>
@@ -255,7 +301,7 @@ export default function Dashboard({ unit }: Props) {
             <input
               type="number"
               min="0"
-              step={unit === 'oz' ? '0.1' : '2.957'}
+              step={unit === 'oz' ? '0.1' : '5'}
               value={coffeeVolumeInput}
               onChange={(event) => updateVolume('coffee_volume_ml', event.target.value)}
               onBlur={() => normalizeVolumeOnBlur('coffee_volume_ml')}
@@ -266,7 +312,7 @@ export default function Dashboard({ unit }: Props) {
             <input
               type="number"
               min="0"
-              step={unit === 'oz' ? '0.1' : '2.957'}
+              step={unit === 'oz' ? '0.1' : '5'}
               value={milkVolumeInput}
               onChange={(event) => updateVolume('milk_volume_ml', event.target.value)}
               onBlur={() => normalizeVolumeOnBlur('milk_volume_ml')}
@@ -313,6 +359,49 @@ export default function Dashboard({ unit }: Props) {
             />
           </label>
         </div>
+        <details className="advanced-ratings">
+          <summary className="label">More taste ratings</summary>
+          <div className="grid two" style={{ marginTop: 12 }}>
+            <label className="stack">
+              <span className="label">Sweetness</span>
+              <StarRating label="Sweetness" value={form.sweetness} onChange={(value) => setForm({ ...form, sweetness: value })} />
+            </label>
+            <label className="stack">
+              <span className="label">Bitterness</span>
+              <StarRating label="Bitterness" value={form.bitterness} onChange={(value) => setForm({ ...form, bitterness: value })} />
+            </label>
+            <label className="stack">
+              <span className="label">Acidity</span>
+              <StarRating label="Acidity" value={form.acidity} onChange={(value) => setForm({ ...form, acidity: value })} />
+            </label>
+            <label className="stack">
+              <span className="label">Body / Mouthfeel</span>
+              <StarRating
+                label="Body and mouthfeel"
+                value={form.body_mouthfeel}
+                onChange={(value) => setForm({ ...form, body_mouthfeel: value })}
+              />
+            </label>
+            <label className="inline" style={{ alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                style={{ width: 'auto', minHeight: 0 }}
+                checked={form.would_make_again}
+                onChange={(event) => setForm({ ...form, would_make_again: event.target.checked })}
+              />
+              <span className="label">Would make again</span>
+            </label>
+            <label className="inline" style={{ alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                style={{ width: 'auto', minHeight: 0 }}
+                checked={form.dialed_in}
+                onChange={(event) => setForm({ ...form, dialed_in: event.target.checked })}
+              />
+              <span className="label">Dialed in</span>
+            </label>
+          </div>
+        </details>
         <div className="grid two">
           <label className="stack">
             <span className="label">Made By</span>
@@ -328,15 +417,17 @@ export default function Dashboard({ unit }: Props) {
             <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           </label>
         </div>
-        <button className="primary" onClick={handleSubmit}>
-          Save Drink
+        <button className="primary" onClick={handleSubmit} disabled={!beanId || saving}>
+          {saving ? 'Saving…' : 'Save Drink'}
         </button>
         {message && <span className="label">{message}</span>}
+        {error && <span className="label error-text">{error}</span>}
       </section>
       <section className="stack">
         <div className="card">
           <h3>Recent Drinks</h3>
           <div className="stack">
+            {drinks.length === 0 && <p className="label">Drinks you log will show up here.</p>}
             {drinks.slice(0, 5).map((drink) => (
               <button key={drink.id} type="button" className="recent-drink-item" onClick={() => setSelectedDrink(drink)}>
                 <div>
@@ -345,7 +436,8 @@ export default function Dashboard({ unit }: Props) {
                   </div>
                   <div>{drink.drink_type}</div>
                   <div className="label">
-                    {formatVolume(drink.coffee_volume_ml, unit)} · Strength {levelLabel.strength[drink.strength_level]}
+                    {formatVolume(drink.coffee_volume_ml, unit)} · Strength{' '}
+                    {levelLabel.strength[drink.strength_level] ?? drink.strength_level}
                   </div>
                 </div>
                 <span className="badge">{drink.overall_rating}</span>
@@ -356,18 +448,16 @@ export default function Dashboard({ unit }: Props) {
         <div className="card">
           <h3>Hall of Fame (30 days)</h3>
           <div className="stack">
-            {drinks
-              .filter((drink) => drink.overall_rating >= 4)
-              .slice(0, 5)
-              .map((drink) => (
-                <div key={drink.id} className="inline" style={{ justifyContent: 'space-between' }}>
-                  <div>
-                    <div>{drink.drink_type}</div>
-                    <div className="label">{drink.notes || 'No notes'}</div>
-                  </div>
-                  <span className="badge">{drink.overall_rating}</span>
+            {hallOfFame.length === 0 && <p className="label">Rate a drink 4+ stars to crown it here.</p>}
+            {hallOfFame.map((drink) => (
+              <div key={drink.id} className="inline" style={{ justifyContent: 'space-between' }}>
+                <div>
+                  <div>{drink.drink_type}</div>
+                  <div className="label">{drink.notes || 'No notes'}</div>
                 </div>
-              ))}
+                <span className="badge">{drink.overall_rating}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -384,6 +474,9 @@ export default function Dashboard({ unit }: Props) {
                 Close
               </button>
             </div>
+            {selectedDrink.thumbnail_path && (
+              <img className="photo-preview large" src={selectedDrink.thumbnail_path} alt="Drink" />
+            )}
             <div className="details-grid">
               <div>
                 <div className="label">Coffee volume</div>
@@ -395,7 +488,7 @@ export default function Dashboard({ unit }: Props) {
               </div>
               <div>
                 <div className="label">Strength</div>
-                <div className="detail-value">{levelLabel.strength[selectedDrink.strength_level]}</div>
+                <div className="detail-value">{levelLabel.strength[selectedDrink.strength_level] ?? selectedDrink.strength_level}</div>
               </div>
               <div>
                 <div className="label">Temperature</div>
@@ -403,7 +496,7 @@ export default function Dashboard({ unit }: Props) {
               </div>
               <div>
                 <div className="label">Body</div>
-                <div className="detail-value">{levelLabel.body[selectedDrink.body_level]}</div>
+                <div className="detail-value">{levelLabel.body[selectedDrink.body_level] ?? selectedDrink.body_level}</div>
               </div>
               <div>
                 <div className="label">Order</div>
@@ -422,6 +515,7 @@ export default function Dashboard({ unit }: Props) {
               <div className="label">Notes</div>
               <div>{selectedDrink.notes || 'No notes yet.'}</div>
             </div>
+            <Link to={`/drinks/${selectedDrink.id}`}>Open full editor</Link>
           </div>
         </div>
       )}
