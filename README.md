@@ -4,14 +4,15 @@ BrewNotes is a self-hosted coffee and espresso logging app designed for fast dai
 
 ## Feature Overview 
 
-- **Fast drink entry flow** optimized for mobile logging.
-- **Bean + drink presets** with auto-loaded settings.
-- **Full KF7 settings** support (strength, temperature, body, order, volumes, grind).
+- **Fast drink entry flow** optimized for mobile logging, with a sticky save button and camera-first photo capture on phones.
+- **Bean + drink presets** with auto-loaded settings — a new bean/drink combo starts from the bean's saved best espresso settings, then copies your most recent matching drink.
+- **Full KF7 settings** support (strength, temperature, body, order, volumes, grind 1–7 — matching the KF7's 7-step grinder).
 - **Attribution** for “Made by” and “Rated by” with recent names.
-- **Analytics dashboard** with Recharts graphs.
-- **Photo management** with thumbnails and a built-in editor (crop, zoom, rotate) for bean and drink photos.
+- **Analytics dashboard** with Recharts graphs, per-bean flavor radar, and recommended settings from your top-rated drinks.
+- **Cost analytics** — estimated cost per drink and monthly spend, derived from bag price/size and per-strength dose estimates (8/11/14 g at Low/Medium/High; tune in `frontend/src/utils/constants.ts`).
+- **Photo management** with thumbnails and a built-in editor (crop, pinch/scroll zoom, rotate, aspect presets) for bean and drink photos.
 - **oz/ml unit toggle** persisted per device.
-- **PWA support** for quick home screen access.
+- **PWA support** for quick home screen access; pages and data are always fetched network-first so deploys show up immediately.
 - **Export/backup endpoints** including JSON, CSV, and ZIP with uploads.
 
 ## Screenshots
@@ -93,8 +94,13 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# Outside Docker, point the data paths somewhere writable first —
+# the defaults are /data, /data/app.db, and /data/uploads.
+export DATA_DIR=../data DB_PATH=../data/app.db UPLOAD_DIR=../data/uploads
+
 alembic -c alembic.ini upgrade head
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8080
 ```
 
 ### Frontend
@@ -109,8 +115,10 @@ The frontend proxies `/api` to the backend in development.
 
 ## API Overview
 
+- `GET /health`
 - `GET /api/beans` (query: `include_archived`)
 - `POST /api/beans`
+- `GET /api/beans/{id}`
 - `PUT /api/beans/{id}`
 - `POST /api/beans/{id}/archive`
 - `POST /api/beans/{id}/unarchive`
@@ -120,9 +128,12 @@ The frontend proxies `/api` to the backend in development.
 
 - `GET /api/drinks`
 - `POST /api/drinks`
+- `GET /api/drinks/{id}`
 - `PUT /api/drinks/{id}`
 - `DELETE /api/drinks/{id}`
 - `POST /api/drinks/{id}/photo`
+
+- `GET /api/analytics` (summary counts; the UI computes most analytics client-side)
 
 - `GET /api/export.json`
 - `GET /api/export.csv`
@@ -145,9 +156,10 @@ The frontend proxies `/api` to the backend in development.
 
 - `bean_id`, `drink_type`, `custom_label`
 - `made_by`, `rated_by`
-- KF7 settings: `strength_level`, `temperature_level`, `body_level`, `order`, `coffee_volume_ml`, `milk_volume_ml`, `grind_setting`
-- Ratings: `overall_rating`, `sweetness`, `bitterness`, `acidity`, `body_mouthfeel`, `balance`, `would_make_again`, `dialed_in`
-- `notes`, `photo_path`, `thumbnail_path`
+- KF7 settings: `strength_level`, `temperature_level`, `body_level`, `order`, `coffee_volume_ml`, `milk_volume_ml`, `grind_setting` (1–7)
+- Ratings (all 1–5): `overall_rating`, `sweetness`, `bitterness`, `acidity`, `body_mouthfeel`, `balance`, plus `would_make_again`, `dialed_in`
+  - `balance` is a scale, not a score: 1 = sour, 3 = balanced, 5 = bitter
+- `notes`, `photo_path`, `thumbnail_path` (photos are stored as `/uploads/...` web paths; volumes are always stored in ml)
 
 ## License
 
