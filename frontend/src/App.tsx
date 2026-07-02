@@ -6,18 +6,23 @@ import Drinks from './pages/Drinks';
 import DrinkDetail from './pages/DrinkDetail';
 import Analytics from './pages/Analytics';
 import { useEffect, useState } from 'react';
+import { Unit } from './utils/units';
 
 const getStored = (key: string, fallback: string) =>
   window.localStorage.getItem(key) || fallback;
 
 export default function App() {
   const [theme, setTheme] = useState(getStored('theme', 'light'));
-  const unit = 'oz';
+  const [unit, setUnit] = useState<Unit>(getStored('unit', 'oz') === 'ml' ? 'ml' : 'oz');
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem('unit', unit);
+  }, [unit]);
 
   return (
     <div className="app-shell">
@@ -31,6 +36,9 @@ export default function App() {
             <p>Fast dial-in logging for your KitchenAid KF7.</p>
           </div>
           <div className="toggles">
+            <button onClick={() => setUnit(unit === 'oz' ? 'ml' : 'oz')} aria-label="Toggle volume units">
+              {unit === 'oz' ? 'oz' : 'ml'}
+            </button>
             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
               {theme === 'light' ? 'Dark' : 'Light'}
             </button>
@@ -39,7 +47,7 @@ export default function App() {
       </header>
       <nav className="main-nav" aria-label="Primary">
         <div className="segmented-control nav-segments">
-          <NavLink to="/" className={({ isActive }) => (isActive ? 'segmented-item active' : 'segmented-item')}>
+          <NavLink to="/" end className={({ isActive }) => (isActive ? 'segmented-item active' : 'segmented-item')}>
             Dashboard
           </NavLink>
           <NavLink to="/beans" className={({ isActive }) => (isActive ? 'segmented-item active' : 'segmented-item')}>
