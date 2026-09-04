@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 type Props = {
   file: File;
   title?: string;
-  onSave: (blob: Blob) => void;
+  onSave: (blob: Blob) => Promise<void> | void;
   onCancel: () => void;
 };
 
@@ -27,13 +27,18 @@ export default function ImageEditor({ file, title = 'Edit Photo', onSave, onCanc
   const [rotation, setRotation] = useState(0);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => setImage(img);
+    img.onload = () => {
+      setError('');
+      setImage(img);
+    };
+    img.onerror = () => setError('This image could not be opened. Try choosing a JPEG, PNG, or WebP photo.');
     img.src = url;
     return () => URL.revokeObjectURL(url);
   }, [file]);
@@ -45,9 +50,23 @@ export default function ImageEditor({ file, title = 'Edit Photo', onSave, onCanc
       }
     };
     measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    const observer = new ResizeObserver(measure);
+    if (frameRef.current) observer.observe(frameRef.current);
+    return () => observer.disconnect();
   }, [image]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) onCancel();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onCancel, saving]);
 
   const frameHeight = useMemo(() => {
     if (!frameWidth) return 0;
@@ -136,6 +155,7 @@ export default function ImageEditor({ file, title = 'Edit Photo', onSave, onCanc
   const handleSave = async () => {
     if (!image || !frameWidth || !frameHeight || saving) return;
     setSaving(true);
+    setError('');
     try {
       // frameWidth / scale = source pixels visible across the crop window.
       const outputWidth = Math.max(1, Math.min(MAX_OUTPUT, Math.round(frameWidth / scale)));
@@ -153,14 +173,16 @@ export default function ImageEditor({ file, title = 'Edit Photo', onSave, onCanc
       ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
       if (!blob) throw new Error('Could not export image');
-      onSave(blob);
+      await onSave(blob);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the edited photo.');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="modal-overlay" role="presentation" onClick={onCancel}>
+    <div className="modal-overlay" role="presentation" onClick={() => !saving && onCancel()}>
       <div
         className="card stack modal-card editor-card"
         role="dialog"
@@ -170,7 +192,7 @@ export default function ImageEditor({ file, title = 'Edit Photo', onSave, onCanc
       >
         <div className="modal-header">
           <h3 style={{ margin: 0 }}>{title}</h3>
-          <button type="button" onClick={onCancel}>
+          <button type="button" onClick={onCancel} disabled={saving} aria-label="Cancel photo editing">
             Cancel
           </button>
         </div>
@@ -195,7 +217,9 @@ export default function ImageEditor({ file, title = 'Edit Photo', onSave, onCanc
             />
           )}
           <div className="editor-grid" aria-hidden="true" />
+          {!image && !error && <div className="editor-status">Loading photo…</div>}
         </div>
+        <p className="editor-help">Drag to reposition. Pinch or use the slider to zoom.</p>
         <label className="stack">
           <span className="label">Zoom</span>
           <input
@@ -220,10 +244,11 @@ export default function ImageEditor({ file, title = 'Edit Photo', onSave, onCanc
               </button>
             ))}
           </div>
-          <button type="button" onClick={rotate}>
+          <button type="button" onClick={rotate} disabled={!image || saving}>
             Rotate 90°
           </button>
         </div>
+        {error && <div className="editor-error" role="alert">{error}</div>}
         <button className="primary" onClick={handleSave} disabled={!image || saving}>
           {saving ? 'Saving…' : 'Save Photo'}
         </button>

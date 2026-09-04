@@ -43,6 +43,7 @@ export default function Beans({ unit }: Props) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     apiGet<Bean[]>('/api/beans?include_archived=true')
@@ -188,11 +189,14 @@ export default function Beans({ unit }: Props) {
                 ☕
               </div>
             )}
-            <button type="button" onClick={() => photoInputRef.current?.click()}>
-              {pendingPhoto ? 'Change Photo' : 'Add Photo'}
+            <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={saving}>
+              Take Photo
+            </button>
+            <button type="button" onClick={() => photoInputRef.current?.click()} disabled={saving}>
+              {pendingPhoto ? 'Choose Another' : 'Choose Photo'}
             </button>
             {pendingPhoto && (
-              <button type="button" onClick={() => setPendingPhoto(null)}>
+              <button type="button" onClick={() => setPendingPhoto(null)} disabled={saving}>
                 Remove
               </button>
             )}
@@ -208,6 +212,19 @@ export default function Beans({ unit }: Props) {
               event.target.value = '';
             }}
           />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) setPendingPhotoFile(file);
+              event.target.value = '';
+            }}
+          />
+          {pendingPhoto && <span className="photo-ready" role="status">Photo edited and ready to upload</span>}
         </div>
         <div className="card stack sub-card">
           <h4 style={{ margin: 0 }}>Best Espresso Settings</h4>
