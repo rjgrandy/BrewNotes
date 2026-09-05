@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiGet, apiSend, uploadFile } from '../utils/api';
 import { Bean, BeanAnalytics, BeanBestSettings, DrinkLog, RecommendedSettings } from '../utils/types';
-import { formatVolume, ozToMl } from '../utils/units';
-import { imageUrl } from '../utils/images';
-import ImageEditor from '../components/ImageEditor';
+import { formatVolume, inputMatchesMl, inputToMl, volumeToInput } from '../utils/units';
+import { beanCostPerDrink, formatMoney } from '../utils/cost';
+import PhotoField from '../components/PhotoField';
 import {
   ScatterChart,
   Scatter,
@@ -43,48 +43,62 @@ export default function BeanDetail({ unit }: Props) {
   const [analytics, setAnalytics] = useState<BeanAnalytics | null>(null);
   const [recommended, setRecommended] = useState<RecommendedSettings | null>(null);
   const [bestVolumeInput, setBestVolumeInput] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const [drinks, setDrinks] = useState<DrinkLog[]>([]);
   const [drinkSort, setDrinkSort] = useState('newest');
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!beanId) return;
     const load = async () => {
-      const beanRes = await apiGet<Bean>(`/api/beans/${beanId}`);
-      const analyticsRes = await apiGet<BeanAnalytics>(`/api/beans/${beanId}/analytics`);
-      const [recRes, drinksRes] = await Promise.all([
-        apiGet<RecommendedSettings>(`/api/beans/${beanId}/recommended-settings`),
-        apiGet<DrinkLog[]>(`/api/drinks?bean_id=${encodeURIComponent(beanId)}`)
-      ]);
-      setBean(beanRes);
-      setForm(beanRes);
-      setAnalytics(analyticsRes);
-      setRecommended(recRes);
-      setDrinks(drinksRes);
+      try {
+        const [beanRes, analyticsRes, recRes, drinksRes] = await Promise.all([
+          apiGet<Bean>(`/api/beans/${beanId}`),
+          apiGet<BeanAnalytics>(`/api/beans/${beanId}/analytics`),
+          apiGet<RecommendedSettings>(`/api/beans/${beanId}/recommended-settings`),
+          apiGet<DrinkLog[]>(`/api/drinks?bean_id=${encodeURIComponent(beanId)}`)
+        ]);
+        setBean(beanRes);
+        setForm(beanRes);
+        setAnalytics(analyticsRes);
+        setRecommended(recRes);
+        setDrinks(drinksRes);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not load bean');
+      }
     };
     load();
   }, [beanId]);
 
   const handleUpdate = async () => {
     if (!beanId) return;
-    const updated = await apiSend<Bean>(`/api/beans/${beanId}`, 'PUT', form);
-    setBean(updated);
-    setForm(updated);
+    setError('');
+    try {
+      const updated = await apiSend<Bean>(`/api/beans/${beanId}`, 'PUT', form);
+      setBean(updated);
+      setForm(updated);
+      setMessage('Saved!');
+      setTimeout(() => setMessage(''), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save changes');
+    }
   };
 
   const handleArchive = async (archive: boolean) => {
     if (!beanId) return;
     const updated = await apiSend<Bean>(`/api/beans/${beanId}/${archive ? 'archive' : 'unarchive'}`, 'POST');
     setBean(updated);
+    setForm((prev) => ({ ...prev, archived: updated.archived }));
   };
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (blob: Blob) => {
     if (!beanId) return;
-    const updated = await uploadFile<Bean>(`/api/beans/${beanId}/photo`, file);
+    const updated = await uploadFile<Bean>(`/api/beans/${beanId}/photo`, blob);
     setBean(updated);
-    setForm(updated);
-    setPhotoFile(null);
+    setForm((prev) => ({ ...prev, image_path: updated.image_path, thumbnail_path: updated.thumbnail_path }));
   };
+
+  const currentBest = (form.current_best_settings || {}) as BeanBestSettings;
 
   const sortedDrinks = useMemo(() => [...drinks].sort((a, b) => {
     if (drinkSort === 'oldest') return a.created_at.localeCompare(b.created_at);
@@ -93,15 +107,13 @@ export default function BeanDetail({ unit }: Props) {
     return b.created_at.localeCompare(a.created_at);
   }), [drinks, drinkSort]);
 
-  const currentBest = (form.current_best_settings || {}) as BeanBestSettings;
-
   useEffect(() => {
     const volumeMl = Number(currentBest.coffee_volume_ml || 0);
-    setBestVolumeInput(unit === 'oz' ? (volumeMl / 29.5735).toFixed(1) : String(volumeMl));
+    setBestVolumeInput((prev) => (inputMatchesMl(prev, volumeMl, unit) ? prev : volumeToInput(volumeMl, unit)));
   }, [currentBest.coffee_volume_ml, unit]);
 
   if (!bean) {
-    return <div className="card">Loading...</div>;
+    return <div className="card">{error || 'Loading...'}</div>;
   }
 
   return (
@@ -118,7 +130,20 @@ export default function BeanDetail({ unit }: Props) {
             </button>
           </div>
         </div>
+        {message && <span className="label">{message}</span>}
+        {error && <span className="label error-text">{error}</span>}
+        <PhotoField
+          label="Bean Photo"
+          photoUrl={bean.image_path}
+          thumbnailUrl={bean.thumbnail_path}
+          editorTitle="Edit Bean Photo"
+          onSave={handleUpload}
+        />
         <div className="grid two">
+          <label className="stack">
+            <span className="label">Name</span>
+            <input value={form.name || ''} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          </label>
           <label className="stack">
             <span className="label">Roaster</span>
             <input value={form.roaster || ''} onChange={(event) => setForm({ ...form, roaster: event.target.value })} />
@@ -136,10 +161,40 @@ export default function BeanDetail({ unit }: Props) {
             <input value={form.roast_level || ''} onChange={(event) => setForm({ ...form, roast_level: event.target.value })} />
           </label>
           <label className="stack">
+            <span className="label">Tasting Notes</span>
+            <input value={form.tasting_notes || ''} onChange={(event) => setForm({ ...form, tasting_notes: event.target.value })} />
+          </label>
+          <label className="stack">
+            <span className="label">Bag Size (g)</span>
+            <input
+              type="number"
+              min="0"
+              value={form.bag_size_g ?? ''}
+              onChange={(event) =>
+                setForm({ ...form, bag_size_g: event.target.value === '' ? null : Number(event.target.value) })
+              }
+            />
+          </label>
+          <label className="stack">
+            <span className="label">Price ($)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.price ?? ''}
+              onChange={(event) =>
+                setForm({ ...form, price: event.target.value === '' ? null : Number(event.target.value) })
+              }
+            />
+          </label>
+          <label className="stack">
             <span className="label">Notes</span>
             <textarea value={form.notes || ''} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           </label>
         </div>
+        {beanCostPerDrink(form as Bean) !== null && (
+          <p className="label">≈ {formatMoney(beanCostPerDrink(form as Bean) as number)} per medium-strength drink</p>
+        )}
         <div className="card stack sub-card">
           <h4 style={{ margin: 0 }}>Best Espresso Settings</h4>
           <div className="grid two">
@@ -167,13 +222,11 @@ export default function BeanDetail({ unit }: Props) {
                 value={bestVolumeInput}
                 onChange={(event) => {
                   setBestVolumeInput(event.target.value);
-                  const next = Number(event.target.value || 0);
+                  const ml = inputToMl(event.target.value, unit);
+                  if (ml === null) return;
                   setForm({
                     ...form,
-                    current_best_settings: {
-                      ...currentBest,
-                      coffee_volume_ml: unit === 'oz' ? ozToMl(next) : next
-                    }
+                    current_best_settings: { ...currentBest, coffee_volume_ml: ml }
                   });
                 }}
               />
@@ -212,48 +265,70 @@ export default function BeanDetail({ unit }: Props) {
             </label>
           </div>
         </div>
-        <div className="photo-field">
-          {bean.image_path ? <img className="bean-photo" src={imageUrl(bean.image_path)} alt={`${bean.name} beans`} /> : <div className="photo-placeholder" aria-hidden="true">☕</div>}
-          <label className="stack photo-picker">
-            <span className="label">Bean photo</span>
-            <span>Take a photo or choose one, then crop and rotate it before saving.</span>
-            <input type="file" accept="image/*" capture="environment" onChange={(event) => event.target.files?.[0] && setPhotoFile(event.target.files[0])} />
-          </label>
-        </div>
       </section>
-      {photoFile && <ImageEditor file={photoFile} onCancel={() => setPhotoFile(null)} onSave={handleUpload} />}
       <section className="card stack" id="brew-history">
         <div className="inline section-heading">
           <div>
             <h3>Drinks made with {bean.name}</h3>
             <p className="label">{drinks.length} {drinks.length === 1 ? 'drink' : 'drinks'} logged</p>
           </div>
-          <label className="sort-control"><span className="label">Sort by</span><select value={drinkSort} onChange={(event) => setDrinkSort(event.target.value)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="rating">Highest rated</option><option value="type">Drink type</option></select></label>
+          <label className="sort-control">
+            <span className="label">Sort by</span>
+            <select value={drinkSort} onChange={(event) => setDrinkSort(event.target.value)}>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="rating">Highest rated</option>
+              <option value="type">Drink type</option>
+            </select>
+          </label>
         </div>
-        {sortedDrinks.length ? <div className="history-list">{sortedDrinks.map((drink) => (
-          <Link className="history-item" key={drink.id} to={`/drinks/${drink.id}`}>
-            <div><strong>{drink.custom_label || drink.drink_type}</strong><span className="label">{new Date(drink.created_at).toLocaleDateString()} · Grind {drink.grind_setting} · {formatVolume(drink.coffee_volume_ml, unit)}</span></div>
-            <span className="badge" aria-label={`${drink.overall_rating} out of 5 stars`}>★ {drink.overall_rating}</span>
-          </Link>
-        ))}</div> : <div className="empty-state"><strong>No drinks with this bean yet.</strong><span className="label">Your next brew will appear here automatically.</span><Link to="/">Log a drink</Link></div>}
+        {sortedDrinks.length ? (
+          <div className="history-list">
+            {sortedDrinks.map((drink) => (
+              <Link className="history-item" key={drink.id} to={`/drinks/${drink.id}`}>
+                <div>
+                  <strong>{drink.custom_label || drink.drink_type}</strong>
+                  <span className="label">
+                    {new Date(drink.created_at).toLocaleDateString()} · Grind {drink.grind_setting} · {formatVolume(drink.coffee_volume_ml, unit)}
+                  </span>
+                </div>
+                <span className="badge" aria-label={`${drink.overall_rating} out of 5 stars`}>★ {drink.overall_rating}</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <strong>No drinks with this bean yet.</strong>
+            <span className="label">Your next brew will appear here automatically.</span>
+            <Link to="/">Log a drink</Link>
+          </div>
+        )}
       </section>
       <section className="grid two">
         <div className="card">
           <h3>Recommended Settings</h3>
           <p className="label">Considered drinks: {recommended?.total_considered ?? 0}</p>
-          <p className="label">
-            Grind {String(recommended?.recommended?.grind_setting ?? '-')} ·{' '}
-            {formatVolume(Number(recommended?.recommended?.coffee_volume_ml || 0), unit)} ·{' '}
-            {String(recommended?.recommended?.temperature_level || '-')}
-          </p>
+          {recommended?.recommended ? (
+            <p className="label">
+              Grind {String(recommended.recommended.grind_setting ?? '-')} ·{' '}
+              {formatVolume(Number(recommended.recommended.coffee_volume_ml || 0), unit)} ·{' '}
+              {String(recommended.recommended.temperature_level || '-')}
+            </p>
+          ) : (
+            <p className="label">Log a few drinks rated 4+ to unlock recommendations.</p>
+          )}
         </div>
         <div className="card">
           <h3>Highest Rated Brew</h3>
-          <p className="label">
-            Grind {String(recommended?.highest_rated?.grind_setting ?? '-')} ·{' '}
-            {formatVolume(Number(recommended?.highest_rated?.coffee_volume_ml || 0), unit)} · Rating{' '}
-            {String(recommended?.highest_rated?.overall_rating ?? '-')}
-          </p>
+          {recommended?.highest_rated ? (
+            <p className="label">
+              Grind {String(recommended.highest_rated.grind_setting ?? '-')} ·{' '}
+              {formatVolume(Number(recommended.highest_rated.coffee_volume_ml || 0), unit)} · Rating{' '}
+              {String(recommended.highest_rated.overall_rating ?? '-')}
+            </p>
+          ) : (
+            <p className="label">No standout brew yet.</p>
+          )}
         </div>
       </section>
       <section className="grid two">
@@ -263,7 +338,7 @@ export default function BeanDetail({ unit }: Props) {
             <ScatterChart>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="x" name="Grind" />
-              <YAxis dataKey="y" name="Rating" />
+              <YAxis dataKey="y" name="Rating" domain={[0, 5]} />
               <Tooltip />
               <Scatter data={analytics?.rating_vs_grind || []} fill="#9c6b4f" />
             </ScatterChart>
@@ -275,7 +350,7 @@ export default function BeanDetail({ unit }: Props) {
             <ScatterChart>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="x" name="Coffee Volume" />
-              <YAxis dataKey="y" name="Rating" />
+              <YAxis dataKey="y" name="Rating" domain={[0, 5]} />
               <Tooltip />
               <Scatter data={analytics?.rating_vs_coffee_volume || []} fill="#9c6b4f" />
             </ScatterChart>
@@ -287,7 +362,7 @@ export default function BeanDetail({ unit }: Props) {
             <BarChart data={analytics?.rating_by_temperature || []}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="temperature_level" />
-              <YAxis />
+              <YAxis domain={[0, 5]} />
               <Tooltip />
               <Bar dataKey="average_rating" fill="#9c6b4f" />
             </BarChart>
@@ -299,7 +374,7 @@ export default function BeanDetail({ unit }: Props) {
             <LineChart data={analytics?.rating_timeline || []}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
-              <YAxis />
+              <YAxis domain={[0, 5]} />
               <Tooltip />
               <Line type="monotone" dataKey="average_rating" stroke="#9c6b4f" />
             </LineChart>
@@ -312,7 +387,7 @@ export default function BeanDetail({ unit }: Props) {
           <RadarChart data={analytics?.radar || []}>
             <PolarGrid />
             <PolarAngleAxis dataKey="category" />
-            <PolarRadiusAxis />
+            <PolarRadiusAxis domain={[0, 5]} />
             <Radar name="Average" dataKey="average" stroke="#9c6b4f" fill="#9c6b4f" fillOpacity={0.4} />
             <Radar
               name="Top Rated"

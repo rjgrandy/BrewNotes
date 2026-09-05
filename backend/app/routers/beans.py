@@ -1,5 +1,4 @@
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -92,6 +91,8 @@ def upload_bean_photo(bean_id: str, file: UploadFile = File(...), db: Session = 
 
 @router.get("/{bean_id}/analytics", response_model=BeanAnalytics)
 def bean_analytics(bean_id: str, db: Session = Depends(get_db)) -> BeanAnalytics:
+    if not db.get(Bean, bean_id):
+        raise HTTPException(status_code=404, detail="Bean not found")
     drinks = db.scalars(select(DrinkLog).where(DrinkLog.bean_id == bean_id)).all()
     rating_vs_grind = [{"x": drink.grind_setting, "y": drink.overall_rating} for drink in drinks]
     rating_vs_coffee = [{"x": drink.coffee_volume_ml, "y": drink.overall_rating} for drink in drinks]
@@ -146,6 +147,8 @@ def bean_analytics(bean_id: str, db: Session = Depends(get_db)) -> BeanAnalytics
 
 @router.get("/{bean_id}/recommended-settings", response_model=RecommendedSettings)
 def recommended_settings(bean_id: str, db: Session = Depends(get_db)) -> RecommendedSettings:
+    if not db.get(Bean, bean_id):
+        raise HTTPException(status_code=404, detail="Bean not found")
     drinks = db.scalars(select(DrinkLog).where(DrinkLog.bean_id == bean_id)).all()
     considered = [drink for drink in drinks if drink.overall_rating >= 4]
     if not considered:
@@ -176,7 +179,9 @@ def recommended_settings(bean_id: str, db: Session = Depends(get_db)) -> Recomme
     highest_rated = max(considered, key=lambda d: d.overall_rating)
 
     recommended_dict = _settings_dict_from_drink(most_common[1][0])
+    recommended_dict["overall_rating"] = round(avg_rating(most_common[1]), 2)
     highest_dict = _settings_dict_from_drink(highest_rated)
+    highest_dict["overall_rating"] = highest_rated.overall_rating
 
     return RecommendedSettings(
         recommended=recommended_dict,

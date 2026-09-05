@@ -75,8 +75,14 @@ export default function Drinks({ unit }: { unit: string }) {
           <label className="stack"><span className="label">Sort by</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="rating">Highest rated</option><option value="type">Drink type</option></select></label>
         </div>
       </div>
+      {filteredDrinks.length === 0 && (
+        <div className="card">
+          <p className="label">No drinks match. Log one from the Dashboard.</p>
+        </div>
+      )}
       {filteredDrinks.map((drink) => (
-        <div key={drink.id} className="card">
+        <div key={drink.id} className="card drink-row">
+          {drink.thumbnail_path && <img className="table-photo" src={drink.thumbnail_path} alt={drink.drink_type} />}
           <div className="inline" style={{ justifyContent: 'space-between' }}>
             <div>
               <h3>{drink.drink_type}</h3>
