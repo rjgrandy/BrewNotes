@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { apiGet, apiSend } from '../utils/api';
 import { Bean } from '../utils/types';
 import { formatVolume, ozToMl } from '../utils/units';
+import { imageUrl } from '../utils/images';
 
 const emptyBean = {
   name: '',
@@ -210,6 +211,9 @@ export default function Beans({ unit }: Props) {
         <section className="grid three">
           {filteredBeans.map((bean) => (
             <div key={bean.id} className="card">
+              <Link to={`/beans/${bean.id}`} className="bean-card-photo" aria-label={`Open ${bean.name}`}>
+                {bean.thumbnail_path || bean.image_path ? <img src={imageUrl(bean.thumbnail_path || bean.image_path)} alt="" /> : <span aria-hidden="true">☕</span>}
+              </Link>
               <div className="inline" style={{ justifyContent: 'space-between' }}>
                 <h3>{bean.name}</h3>
                 {bean.archived && <span className="badge">Archived</span>}
@@ -222,7 +226,7 @@ export default function Beans({ unit }: Props) {
                   {formatVolume(Number(bean.current_best_settings.coffee_volume_ml || 0), unit)}
                 </p>
               )}
-              <Link to={`/beans/${bean.id}`}>View</Link>
+              <div className="inline card-links"><Link to={`/beans/${bean.id}`}>View bean</Link><Link to={`/drinks?bean=${encodeURIComponent(bean.id)}`}>View drinks</Link></div>
             </div>
           ))}
         </section>

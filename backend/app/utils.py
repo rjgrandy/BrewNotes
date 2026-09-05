@@ -1,8 +1,9 @@
 import io
+import uuid
 from pathlib import Path
 from typing import Tuple
 
-from PIL import Image
+from PIL import Image, ImageOps
 from fastapi import UploadFile
 
 
@@ -14,7 +15,7 @@ def ensure_dirs(*paths: Path) -> None:
 def save_upload(file: UploadFile, upload_dir: Path, thumb_dir: Path) -> Tuple[str, str]:
     ensure_dirs(upload_dir, thumb_dir)
     original_name = Path(file.filename or "").name
-    filename = original_name or "upload"
+    filename = f"{uuid.uuid4().hex}{Path(original_name).suffix.lower() or '.jpg'}"
     target_path = upload_dir / filename
     counter = 1
     while target_path.exists():
@@ -26,7 +27,7 @@ def save_upload(file: UploadFile, upload_dir: Path, thumb_dir: Path) -> Tuple[st
     with target_path.open("wb") as buffer:
         buffer.write(file.file.read())
 
-    thumb_path = thumb_dir / target_path.name
+    thumb_path = thumb_dir / f"{target_path.stem}.jpg"
     create_thumbnail(target_path, thumb_path)
 
     return str(target_path), str(thumb_path)
@@ -34,7 +35,10 @@ def save_upload(file: UploadFile, upload_dir: Path, thumb_dir: Path) -> Tuple[st
 
 def create_thumbnail(source: Path, destination: Path, size: int = 400) -> None:
     with Image.open(source) as img:
+        img = ImageOps.exif_transpose(img)
         img.thumbnail((size, size))
+        if img.mode != "RGB":
+            img = img.convert("RGB")
         with io.BytesIO() as buffer:
-            img.save(buffer, format=img.format or "JPEG")
+            img.save(buffer, format="JPEG", quality=88)
             destination.write_bytes(buffer.getvalue())

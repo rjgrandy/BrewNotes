@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiGet, apiSend, uploadFile } from '../utils/api';
 import { Bean, DrinkLog } from '../utils/types';
 import { DRINK_TYPES } from '../utils/constants';
-import { ozToMl } from '../utils/units';
+import { formatVolume, ozToMl } from '../utils/units';
 import SegmentedControl from '../components/SegmentedControl';
 import StarRating from '../components/StarRating';
+import { imageUrl } from '../utils/images';
 
 export default function DrinkDetail({ unit }: { unit: string }) {
   const { drinkId } = useParams();
@@ -14,6 +15,7 @@ export default function DrinkDetail({ unit }: { unit: string }) {
   const [beans, setBeans] = useState<Bean[]>([]);
   const [coffeeVolumeInput, setCoffeeVolumeInput] = useState('');
   const [milkVolumeInput, setMilkVolumeInput] = useState('');
+  const [relatedDrinks, setRelatedDrinks] = useState<DrinkLog[]>([]);
 
   useEffect(() => {
     if (!drinkId) return;
@@ -25,6 +27,12 @@ export default function DrinkDetail({ unit }: { unit: string }) {
     };
     load();
   }, [drinkId]);
+
+  useEffect(() => {
+    if (!drink?.bean_id) return;
+    apiGet<DrinkLog[]>(`/api/drinks?bean_id=${encodeURIComponent(drink.bean_id)}`)
+      .then((items) => setRelatedDrinks(items.filter((item) => item.id !== drink.id)));
+  }, [drink?.bean_id, drink?.id]);
 
   useEffect(() => {
     if (!drink) return;
@@ -94,7 +102,10 @@ export default function DrinkDetail({ unit }: { unit: string }) {
     return <div className="card">Loading...</div>;
   }
 
+  const selectedBean = beans.find((bean) => bean.id === drink.bean_id);
+
   return (
+    <div className="stack">
     <section className="card stack">
       <div className="inline" style={{ justifyContent: 'space-between' }}>
         <h3>Edit Drink</h3>
@@ -134,6 +145,12 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           </div>
         </label>
       </div>
+      {selectedBean && (
+        <Link className="related-bean" to={`/beans/${selectedBean.id}`}>
+          {selectedBean.thumbnail_path || selectedBean.image_path ? <img src={imageUrl(selectedBean.thumbnail_path || selectedBean.image_path)} alt="" /> : <span className="related-bean-placeholder" aria-hidden="true">☕</span>}
+          <span><span className="label">Bean used for this drink</span><strong>{selectedBean.name}</strong><span>{selectedBean.roaster || 'View bean details and full brew history'} →</span></span>
+        </Link>
+      )}
       <div className="grid two">
         <div className="stack">
           <span className="label">Strength</span>
@@ -260,5 +277,7 @@ export default function DrinkDetail({ unit }: { unit: string }) {
         <input type="file" onChange={(event) => event.target.files?.[0] && handleUpload(event.target.files[0])} />
       </label>
     </section>
+    {selectedBean && <section className="card stack"><div className="inline section-heading"><div><h3>More with {selectedBean.name}</h3><p className="label">Compare this drink with other brews using the same bean.</p></div><Link to={`/beans/${selectedBean.id}#brew-history`}>See all & sort</Link></div>{relatedDrinks.length ? <div className="history-list">{relatedDrinks.slice(0, 4).map((item) => <Link className="history-item" to={`/drinks/${item.id}`} key={item.id}><div><strong>{item.custom_label || item.drink_type}</strong><span className="label">{new Date(item.created_at).toLocaleDateString()} · Grind {item.grind_setting} · {formatVolume(item.coffee_volume_ml, unit)}</span></div><span className="badge">★ {item.overall_rating}</span></Link>)}</div> : <p className="label">This is the only drink logged with this bean so far.</p>}</section>}
+    </div>
   );
 }

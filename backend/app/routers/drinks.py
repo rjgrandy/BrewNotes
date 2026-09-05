@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..deps import get_db
-from ..models import DrinkLog
+from ..models import Bean, DrinkLog
 from ..schemas import DrinkLogCreate, DrinkLogOut, DrinkLogUpdate
 from ..utils import save_upload
 
@@ -14,12 +14,17 @@ router = APIRouter(prefix="/api/drinks", tags=["drinks"])
 
 
 @router.get("", response_model=list[DrinkLogOut])
-def list_drinks(db: Session = Depends(get_db)) -> list[DrinkLog]:
-    return db.scalars(select(DrinkLog).order_by(DrinkLog.created_at.desc())).all()
+def list_drinks(bean_id: str | None = None, db: Session = Depends(get_db)) -> list[DrinkLog]:
+    query = select(DrinkLog)
+    if bean_id:
+        query = query.where(DrinkLog.bean_id == bean_id)
+    return db.scalars(query.order_by(DrinkLog.created_at.desc())).all()
 
 
 @router.post("", response_model=DrinkLogOut)
 def create_drink(payload: DrinkLogCreate, db: Session = Depends(get_db)) -> DrinkLog:
+    if not db.get(Bean, payload.bean_id):
+        raise HTTPException(status_code=400, detail="Bean not found")
     drink = DrinkLog(**payload.model_dump())
     db.add(drink)
     db.commit()
@@ -40,6 +45,8 @@ def update_drink(drink_id: str, payload: DrinkLogUpdate, db: Session = Depends(g
     drink = db.get(DrinkLog, drink_id)
     if not drink:
         raise HTTPException(status_code=404, detail="Drink not found")
+    if not db.get(Bean, payload.bean_id):
+        raise HTTPException(status_code=400, detail="Bean not found")
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(drink, key, value)
     db.commit()

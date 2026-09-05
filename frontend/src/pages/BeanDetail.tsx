@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { apiGet, apiSend, uploadFile } from '../utils/api';
-import { Bean, BeanAnalytics, BeanBestSettings, RecommendedSettings } from '../utils/types';
+import { Bean, BeanAnalytics, BeanBestSettings, DrinkLog, RecommendedSettings } from '../utils/types';
 import { formatVolume, ozToMl } from '../utils/units';
+import { imageUrl } from '../utils/images';
+import ImageEditor from '../components/ImageEditor';
 import {
   ScatterChart,
   Scatter,
@@ -41,17 +43,24 @@ export default function BeanDetail({ unit }: Props) {
   const [analytics, setAnalytics] = useState<BeanAnalytics | null>(null);
   const [recommended, setRecommended] = useState<RecommendedSettings | null>(null);
   const [bestVolumeInput, setBestVolumeInput] = useState('');
+  const [drinks, setDrinks] = useState<DrinkLog[]>([]);
+  const [drinkSort, setDrinkSort] = useState('newest');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!beanId) return;
     const load = async () => {
       const beanRes = await apiGet<Bean>(`/api/beans/${beanId}`);
       const analyticsRes = await apiGet<BeanAnalytics>(`/api/beans/${beanId}/analytics`);
-      const recRes = await apiGet<RecommendedSettings>(`/api/beans/${beanId}/recommended-settings`);
+      const [recRes, drinksRes] = await Promise.all([
+        apiGet<RecommendedSettings>(`/api/beans/${beanId}/recommended-settings`),
+        apiGet<DrinkLog[]>(`/api/drinks?bean_id=${encodeURIComponent(beanId)}`)
+      ]);
       setBean(beanRes);
       setForm(beanRes);
       setAnalytics(analyticsRes);
       setRecommended(recRes);
+      setDrinks(drinksRes);
     };
     load();
   }, [beanId]);
@@ -73,7 +82,16 @@ export default function BeanDetail({ unit }: Props) {
     if (!beanId) return;
     const updated = await uploadFile<Bean>(`/api/beans/${beanId}/photo`, file);
     setBean(updated);
+    setForm(updated);
+    setPhotoFile(null);
   };
+
+  const sortedDrinks = useMemo(() => [...drinks].sort((a, b) => {
+    if (drinkSort === 'oldest') return a.created_at.localeCompare(b.created_at);
+    if (drinkSort === 'rating') return b.overall_rating - a.overall_rating || b.created_at.localeCompare(a.created_at);
+    if (drinkSort === 'type') return a.drink_type.localeCompare(b.drink_type) || b.created_at.localeCompare(a.created_at);
+    return b.created_at.localeCompare(a.created_at);
+  }), [drinks, drinkSort]);
 
   const currentBest = (form.current_best_settings || {}) as BeanBestSettings;
 
@@ -194,10 +212,30 @@ export default function BeanDetail({ unit }: Props) {
             </label>
           </div>
         </div>
-        <label className="stack">
-          <span className="label">Bean Photo</span>
-          <input type="file" onChange={(event) => event.target.files?.[0] && handleUpload(event.target.files[0])} />
-        </label>
+        <div className="photo-field">
+          {bean.image_path ? <img className="bean-photo" src={imageUrl(bean.image_path)} alt={`${bean.name} beans`} /> : <div className="photo-placeholder" aria-hidden="true">☕</div>}
+          <label className="stack photo-picker">
+            <span className="label">Bean photo</span>
+            <span>Take a photo or choose one, then crop and rotate it before saving.</span>
+            <input type="file" accept="image/*" capture="environment" onChange={(event) => event.target.files?.[0] && setPhotoFile(event.target.files[0])} />
+          </label>
+        </div>
+      </section>
+      {photoFile && <ImageEditor file={photoFile} onCancel={() => setPhotoFile(null)} onSave={handleUpload} />}
+      <section className="card stack" id="brew-history">
+        <div className="inline section-heading">
+          <div>
+            <h3>Drinks made with {bean.name}</h3>
+            <p className="label">{drinks.length} {drinks.length === 1 ? 'drink' : 'drinks'} logged</p>
+          </div>
+          <label className="sort-control"><span className="label">Sort by</span><select value={drinkSort} onChange={(event) => setDrinkSort(event.target.value)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="rating">Highest rated</option><option value="type">Drink type</option></select></label>
+        </div>
+        {sortedDrinks.length ? <div className="history-list">{sortedDrinks.map((drink) => (
+          <Link className="history-item" key={drink.id} to={`/drinks/${drink.id}`}>
+            <div><strong>{drink.custom_label || drink.drink_type}</strong><span className="label">{new Date(drink.created_at).toLocaleDateString()} · Grind {drink.grind_setting} · {formatVolume(drink.coffee_volume_ml, unit)}</span></div>
+            <span className="badge" aria-label={`${drink.overall_rating} out of 5 stars`}>★ {drink.overall_rating}</span>
+          </Link>
+        ))}</div> : <div className="empty-state"><strong>No drinks with this bean yet.</strong><span className="label">Your next brew will appear here automatically.</span><Link to="/">Log a drink</Link></div>}
       </section>
       <section className="grid two">
         <div className="card">

@@ -15,14 +15,11 @@ app.include_router(drinks.router)
 app.include_router(analytics.router)
 app.include_router(export.router)
 
-frontend_path = Path(__file__).resolve().parents[2] / "frontend" / "dist"
-
-if frontend_path.exists():
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-
 uploads_path = settings.upload_dir
 uploads_path.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
+
+frontend_path = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
 @app.get("/health")
@@ -34,3 +31,8 @@ def health_check() -> dict:
 def spa_index() -> FileResponse:
     index_file = frontend_path / "index.html"
     return FileResponse(index_file)
+
+
+# Keep this catch-all mount last so API, health, and uploaded images remain reachable.
+if frontend_path.exists():
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
