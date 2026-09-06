@@ -116,8 +116,8 @@ test('photo editing previews crop and rotation, cancels without uploading, and s
   await expect(page.getByRole('dialog', { includeHidden: true })).toHaveCount(2);
   await page.getByRole('button', { name: 'Rotate left', exact: true }).click();
   await page.getByRole('button', { name: 'Save photo', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(1);
-  expect(state.uploads).toHaveLength(2);
+  await expect(page.getByRole('dialog', { includeHidden: true })).toHaveCount(1);
+  await expect.poll(() => state.uploads.length).toBe(2);
   expect(state.beans[0].photos).toHaveLength(1);
 });
 
