@@ -22,6 +22,7 @@ export function DialogContent({ children, className, wide, bare }: ContentProps)
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="dialog-overlay" />
       <DialogPrimitive.Content
+        aria-describedby={undefined}
         className={cn('dialog-content', wide && 'dialog-wide', bare && 'dialog-bare', className)}
       >
         {children}

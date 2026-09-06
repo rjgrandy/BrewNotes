@@ -19,7 +19,7 @@ from ..schemas import (
     BeanUpdate,
     RecommendedSettings,
 )
-from ..utils import save_upload
+from ..utils import save_upload, remove_upload
 
 router = APIRouter(prefix="/api/beans", tags=["beans"])
 
@@ -156,12 +156,7 @@ def delete_recipe(bean_id: str, drink_type: str, db: Session = Depends(get_db)) 
 
 
 def _safe_unlink(path: str | None) -> None:
-    if not path:
-        return
-    try:
-        Path(path).unlink(missing_ok=True)
-    except OSError:
-        pass
+    remove_upload(path, settings.upload_dir)
 
 
 @router.post("/{bean_id}/photos", response_model=BeanOut)
@@ -212,6 +207,26 @@ def delete_bean_photo(bean_id: str, photo_id: str, db: Session = Depends(get_db)
             bean.thumbnail_path = None
     db.commit()
     db.refresh(bean)
+    return bean
+
+
+@router.post("/{bean_id}/photos/{photo_id}/image", response_model=BeanOut)
+def replace_bean_photo(bean_id: str, photo_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)) -> Bean:
+    bean = db.get(Bean, bean_id)
+    photo = db.get(BeanPhoto, photo_id)
+    if not bean or not photo or photo.bean_id != bean_id:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    old_image, old_thumb = photo.image_path, photo.thumbnail_path
+    upload_dir = settings.upload_dir / "beans"
+    image_path, thumbnail_path = save_upload(file, upload_dir, upload_dir / "thumbs")
+    photo.image_path, photo.thumbnail_path = image_path, thumbnail_path
+    if bean.image_path == old_image:
+        bean.image_path, bean.thumbnail_path = image_path, thumbnail_path
+    bean.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(bean)
+    _safe_unlink(old_image)
+    _safe_unlink(old_thumb)
     return bean
 
 

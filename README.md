@@ -10,17 +10,18 @@ BrewNotes is a self-hosted coffee and espresso logging app designed for fast dai
 - **Attribution** for “Made by” and “Rated by” with recent names.
 - **Analytics dashboard** with Recharts graphs.
 - **Photo management** with thumbnails.
+- **Photo editor** for camera and library images: crop, rotate, zoom, and reposition before saving; edit existing bean and drink photos.
+- **Connected brewing history**: open a bean to search and sort its brews, or open a drink type to compare every bean used.
+- **Brew again** from a saved log, with its settings copied and fresh ratings and notes.
+- **Light/dark themes and oz/ml preferences**, with responsive layouts and keyboard controls.
 - **PWA support** for quick home screen access.
 - **Export/backup endpoints** including JSON, CSV, and ZIP with uploads.
 
 ## Screenshots
 
-> _Add screenshots here once you deploy BrewNotes._
+See [the redesign review](docs/redesign-review.md) for the changed flows and validation instructions.
 
-- Dashboard
-- Beans list
-- Bean analytics
-- Drink detail
+[Desktop brewing view](docs/screenshots/brew-desktop.png) · [Mobile bean comparison](docs/screenshots/compare-mobile.png)
 
 ## Quick Start (Docker)
 
@@ -71,7 +72,9 @@ BrewNotes provides full export endpoints:
 
 1. Extract the ZIP locally.
 2. Copy `uploads/` back into `/data/uploads`.
-3. Restore the SQLite database from `/data/app.db`.
+3. Stop BrewNotes and replace `/data/app.db` with the `app.db` snapshot included in the ZIP, then restart.
+
+Keep the same upload directory mapping when restoring: stored photo paths refer to that directory. ZIP backups now include the database snapshot, bean ratings, per-drink recipes, gallery metadata, JSON/CSV exports, and uploads. Older ZIP exports do not include a database snapshot; keep a separate copy of their database.
 
 ## Permissions (PUID/PGID)
 
@@ -87,16 +90,23 @@ If you run into permission issues, delete `/data/.brewnotes_permissions` to forc
 
 ### Backend
 
+Use Python 3.11 or newer. From the `backend` directory, point development at a separate data folder before starting the API:
+
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+export DATA_DIR="$PWD/.data"
+export DB_PATH="$DATA_DIR/app.db"
+export UPLOAD_DIR="$DATA_DIR/uploads"
 alembic -c alembic.ini upgrade head
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8080
 ```
 
 ### Frontend
+
+Use Node.js 20 or newer.
 
 ```bash
 cd frontend
@@ -106,6 +116,22 @@ npm run dev
 
 The frontend proxies `/api` to the backend in development.
 
+### Validation
+
+From the repository root:
+
+```bash
+pip install -r backend/requirements.txt httpx
+python backend/tests/test_journal.py
+cd frontend
+npm ci
+npm run build
+npx playwright install chromium
+npm test
+```
+
+Backend tests create and migrate an isolated temporary database. UI tests use mock journal data and run against the production build at port 5173. On Windows with Edge installed, set `PLAYWRIGHT_CHANNEL=msedge` to use it for testing.
+
 ## API Overview
 
 - `GET /api/beans` (query: `include_archived`)
@@ -114,10 +140,14 @@ The frontend proxies `/api` to the backend in development.
 - `POST /api/beans/{id}/archive`
 - `POST /api/beans/{id}/unarchive`
 - `POST /api/beans/{id}/photo`
+- `POST /api/beans/{id}/photos`
+- `POST /api/beans/{id}/photos/{photo_id}/image` (replace an edited image, keeping its gallery identity and cover status)
+- `POST /api/beans/{id}/photos/{photo_id}/cover`
+- `DELETE /api/beans/{id}/photos/{photo_id}`
 - `GET /api/beans/{id}/analytics`
 - `GET /api/beans/{id}/recommended-settings`
 
-- `GET /api/drinks`
+- `GET /api/drinks` (optional `bean_id` and `drink_type` filters, combined when both are supplied)
 - `POST /api/drinks`
 - `PUT /api/drinks/{id}`
 - `DELETE /api/drinks/{id}`

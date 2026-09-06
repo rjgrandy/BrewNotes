@@ -51,11 +51,11 @@ function VolumeInput({
           setText(next);
           if (next.trim() === '') return;
           const num = Number(next);
-          if (Number.isNaN(num)) return;
+          if (!Number.isFinite(num) || num < 0) return;
           onChangeMl(unit === 'oz' ? ozToMl(num) : num);
         }}
         onBlur={() => {
-          if (text.trim() === '') onChangeMl(0);
+          if (text.trim() === '' || Number(text) < 0) { onChangeMl(0); setText(formatVol(0, unit)); }
         }}
       />
     </label>

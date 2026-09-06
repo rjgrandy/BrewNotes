@@ -20,6 +20,9 @@ export const deleteRecipe = (beanId: string, drinkType: string): Promise<{ statu
 export const uploadBeanPhoto = (beanId: string, file: File): Promise<Bean> =>
   uploadFile<Bean>(`/api/beans/${beanId}/photos`, file);
 
+export const replaceBeanPhoto = (beanId: string, photoId: string, file: File): Promise<Bean> =>
+  uploadFile<Bean>(`/api/beans/${beanId}/photos/${photoId}/image`, file);
+
 export const deleteBeanPhoto = (beanId: string, photoId: string): Promise<Bean> =>
   apiSend<Bean>(`/api/beans/${beanId}/photos/${photoId}`, 'DELETE');
 

@@ -1,0 +1,12 @@
+.git
+.tools
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.tsbuildinfo
+backend/.venv
+backend/.data
+backend/.test-data
+frontend/dist
+frontend/test-results
+frontend/playwright-report

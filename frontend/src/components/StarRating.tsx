@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Star } from 'lucide-react';
+import { radioKeyboard } from '../utils/radioKeyboard';
 
 type Props = {
   label: string;
@@ -26,6 +27,8 @@ export default function StarRating({ label, value, onChange, size = 26 }: Props)
             data-active={active}
             role="radio"
             aria-checked={value === star}
+            tabIndex={value === star || (!value && star === 1) ? 0 : -1}
+            onKeyDown={event => radioKeyboard(event, star - 1, stars.length, next => onChange(stars[next]))}
             aria-label={`Set ${label} to ${star} ${star === 1 ? 'star' : 'stars'}`}
             onClick={() => onChange(star)}
             onMouseEnter={() => setHovered(star)}

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
-import { apiGet, apiSend } from '../utils/api';
+import { apiSend } from '../utils/api';
 import { recipeForType } from '../utils/beanApi';
-import { Bean } from '../utils/types';
+import { Bean, DrinkLog } from '../utils/types';
+import { averageRating } from '../utils/history';
+import { useAction, useResource } from '../utils/useResource';
+import LoadState from '../components/LoadState';
 import { mediaUrl } from '../utils/media';
 import { recipeSummaryText } from '../components/RecipeSummary';
 import StarsDisplay from '../components/StarsDisplay';
@@ -33,12 +36,17 @@ export default function Beans({ unit }: Props) {
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [sort, setSort] = useState<Sort>('updated');
-  const [createOpen, setCreateOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(params.get('add') === 'true');
+  const navigate = useNavigate();
+  const { busy, run } = useAction();
+  const coffees = useResource<Bean[]>('/api/beans?include_archived=true');
+  const logs = useResource<DrinkLog[]>('/api/drinks');
   const toast = useToast();
 
   useEffect(() => {
-    apiGet<Bean[]>('/api/beans?include_archived=true').then(setBeans);
-  }, []);
+    setBeans(coffees.data ?? []);
+  }, [coffees.data]);
 
   const handleCreate = async () => {
     if (!form.name.trim()) {
@@ -47,6 +55,7 @@ export default function Beans({ unit }: Props) {
     }
     const created = await apiSend<Bean>('/api/beans', 'POST', {
       ...form,
+      name: form.name.trim(),
       bag_size_g: form.bag_size_g ? Number(form.bag_size_g) : null,
       price: form.price ? Number(form.price) : null
     });
@@ -54,6 +63,7 @@ export default function Beans({ unit }: Props) {
     setForm(emptyBean);
     setCreateOpen(false);
     toast('Bean added', 'success');
+    navigate(`/beans/${created.id}?tab=overview`);
   };
 
   const filtered = useMemo(() => {
@@ -76,27 +86,31 @@ export default function Beans({ unit }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="page-heading">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Beans</h1>
-          <p className="text-sm text-muted">Your roster of coffees and their best recipes.</p>
+          <p className="eyebrow">The coffee collection</p>
+          <h1>It starts with the beans.</h1>
+          <p>Your coffees, favorite recipes, and the cups they’ve inspired.</p>
         </div>
         <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
           <Plus size={18} /> Add bean
         </button>
       </div>
 
+      <div className="flex flex-wrap gap-2"><span className="badge">{beans.filter(b => !b.archived).length} active coffees</span><span className="badge">{beans.filter(b => b.archived).length} archived</span></div>
+
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
+            aria-label="Search beans"
             className="input pl-9"
             placeholder="Search name, roaster, origin, notes…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
-        <select className="input sm:w-44" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+        <select aria-label="Sort beans" className="input sm:w-44" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
           <option value="updated">Recently updated</option>
           <option value="rating">Highest rated</option>
           <option value="name">Name A–Z</option>
@@ -107,14 +121,16 @@ export default function Beans({ unit }: Props) {
         </label>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="card p-8 text-center text-muted">No beans match your search.</div>
+      <LoadState loading={coffees.loading} error={coffees.error} retry={coffees.retry} />
+      {!coffees.loading && !coffees.error && (filtered.length === 0 ? (
+        <div className="card empty-state"><h2>{beans.length ? 'No coffees found' : 'Meet your next favorite coffee.'}</h2><p>{beans.length ? 'Try a different search or include archived beans.' : 'Add a bag, save its photo, and keep every brew together.'}</p>{beans.length ? <button className="btn" onClick={() => { setSearch(''); setShowArchived(true); }}>Show all beans</button> : <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>Add your first bean</button>}</div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((bean) => {
             const cover = mediaUrl(bean.thumbnail_path) || mediaUrl(bean.image_path);
             const recipes = bean.recipes ?? [];
             const espresso = recipeForType(bean, 'Espresso');
+            const brews = (logs.data ?? []).filter(d => d.bean_id === bean.id);
             return (
               <Link
                 key={bean.id}
@@ -168,14 +184,15 @@ export default function Beans({ unit }: Props) {
                   ) : (
                     <p className="mt-auto text-xs text-muted">No saved recipes yet</p>
                   )}
+                  <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs"><span className="text-muted">{logs.data ? `${brews.length} brews${brews.length ? ` · ${averageRating(brews).toFixed(1)} avg` : ''}` : 'Brewing journal'}</span><span className="font-semibold text-accent">View brews →</span></div>
                 </div>
               </Link>
             );
           })}
         </div>
-      )}
+      ))}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={open => { if (!busy) { setCreateOpen(open); if (!open && params.has('add')) setParams({}); } }}>
         <DialogContent>
           <DialogTitle className="mb-1 text-lg font-bold">Add a bean</DialogTitle>
           <p className="mb-4 text-sm text-muted">Capture the essentials — dial in recipes from the bean page.</p>
@@ -240,8 +257,8 @@ export default function Beans({ unit }: Props) {
             <DialogClose asChild>
               <button className="btn">Cancel</button>
             </DialogClose>
-            <button className="btn btn-primary" onClick={handleCreate}>
-              Save bean
+            <button className="btn btn-primary" disabled={busy || !form.name.trim()} onClick={() => run(handleCreate)}>
+              {busy ? 'Saving…' : 'Save bean & add photos'}
             </button>
           </div>
         </DialogContent>

@@ -1,299 +1,89 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, Trophy, BookmarkPlus } from 'lucide-react';
-import { apiGet, apiSend } from '../utils/api';
+import { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowUpRight, BookmarkPlus, Check, Coffee, Sparkles, Trophy } from 'lucide-react';
+import { apiSend, uploadFile } from '../utils/api';
 import { upsertRecipe, recipeForType } from '../utils/beanApi';
 import { Bean, DrinkLog, RecipeSettings } from '../utils/types';
 import { DEFAULT_RATINGS, DEFAULT_SETTINGS, DRINK_TYPES } from '../utils/constants';
-import { formatVolume } from '../utils/units';
 import { addRecentName, getDefaultName, getRecentNames } from '../utils/attribution';
+import { useAction, useResource } from '../utils/useResource';
+import { beanLabel } from '../utils/history';
 import ChipSelect from '../components/ChipSelect';
 import RecipeControls from '../components/RecipeControls';
 import RatingPanel from '../components/RatingPanel';
+import DrinkCard from '../components/DrinkCard';
+import PhotoPicker from '../components/PhotoPicker';
+import LoadState from '../components/LoadState';
 import { useToast } from '../components/ui/Toast';
-import { Dialog, DialogContent, DialogTitle, DialogClose } from '../components/ui/Dialog';
 
-const defaultDrink = {
-  custom_label: '',
-  notes: '',
-  ...DEFAULT_SETTINGS,
-  ...DEFAULT_RATINGS
-};
+const extractSettings = (source: RecipeSettings): RecipeSettings => ({
+  temperature_level: source.temperature_level, body_level: source.body_level, order: source.order,
+  coffee_volume_ml: source.coffee_volume_ml, milk_volume_ml: source.milk_volume_ml,
+  strength_level: source.strength_level, grind_setting: source.grind_setting
+});
+const freshForm = (settings: RecipeSettings) => ({ ...DEFAULT_SETTINGS, ...settings, ...DEFAULT_RATINGS, notes: '', custom_label: '' });
 
-const SETTING_KEYS: (keyof RecipeSettings)[] = [
-  'temperature_level',
-  'body_level',
-  'order',
-  'coffee_volume_ml',
-  'milk_volume_ml',
-  'strength_level',
-  'grind_setting'
-];
+export default function Dashboard({ unit }: { unit: string }) {
+  const coffees = useResource<Bean[]>('/api/beans?include_archived=true');
+  const logs = useResource<DrinkLog[]>('/api/drinks');
+  const [params] = useSearchParams();
+  return <div className="flex flex-col gap-6">
+    <section className="journal-hero"><p className="eyebrow">Your daily coffee ritual</p><h1 className="hero-title">Make a little time<br />for a <em>better cup.</em></h1><p className="mt-3 max-w-lg text-sm text-muted">Keep what worked. Tweak what didn’t. Your favorite coffee is a few notes away.</p><Coffee className="hero-coffee" aria-hidden="true" /></section>
+    <LoadState loading={coffees.loading || logs.loading} error={coffees.error} retry={coffees.retry} />
+    <LoadState error={logs.error} retry={logs.retry} />
+    {coffees.data && !logs.loading && (coffees.data.length ? <BrewForm key={params.toString()} initialBeans={coffees.data} initialDrinks={logs.data ?? []} requestedBean={params.get('bean')} requestedType={params.get('type')} repeatId={params.get('repeat')} unit={unit} /> : <div className="card empty-state"><h2>First, meet your beans.</h2><p>Add the coffee you’re brewing with. We’ll keep its photos, recipes, and every cup together.</p><Link className="btn btn-primary" to="/beans?add=true">Add your first bean</Link></div>)}
+  </div>;
+}
 
-const extractSettings = (source: DrinkLog | RecipeSettings): RecipeSettings => {
-  const out: RecipeSettings = {};
-  for (const key of SETTING_KEYS) {
-    const val = (source as Record<string, unknown>)[key];
-    if (val !== undefined && val !== null) (out as Record<string, unknown>)[key] = val;
-  }
-  return out;
-};
-
-const STRENGTH_LABEL: Record<string, string> = { LOW: 'Low', MEDIUM: 'Medium', HIGH: 'Strong' };
-const BODY_LABEL: Record<string, string> = { LIGHT: 'Light', MEDIUM: 'Medium', BOLD: 'Bold' };
-
-type Props = { unit: string };
-
-export default function Dashboard({ unit }: Props) {
-  const [beans, setBeans] = useState<Bean[]>([]);
-  const [drinks, setDrinks] = useState<DrinkLog[]>([]);
-  const [beanId, setBeanId] = useState('');
-  const [drinkType, setDrinkType] = useState(DRINK_TYPES[0]);
-  const [form, setForm] = useState(defaultDrink);
+function BrewForm({ initialBeans, initialDrinks, requestedBean, requestedType, repeatId, unit }: { initialBeans: Bean[]; initialDrinks: DrinkLog[]; requestedBean: string | null; requestedType: string | null; repeatId: string | null; unit: string }) {
+  const repeat = initialDrinks.find(d => d.id === repeatId);
+  const initialBean = initialBeans.find(b => b.id === (repeat?.bean_id || requestedBean)) || initialBeans.find(b => !b.archived);
+  const initialType = repeat?.drink_type || (DRINK_TYPES.includes(requestedType || '') ? requestedType! : DRINK_TYPES[0]);
+  const [beans, setBeans] = useState(initialBeans);
+  const [drinks, setDrinks] = useState(initialDrinks);
+  const [beanId, setBeanId] = useState(initialBean?.id || '');
+  const [drinkType, setDrinkType] = useState(initialType);
+  const settingsFor = (id: string, type: string): RecipeSettings => recipeForType(beans.find(b => b.id === id), type)
+    ?? extractSettings(drinks.find(d => d.bean_id === id && d.drink_type === type) ?? DEFAULT_SETTINGS);
+  const [form, setForm] = useState(() => freshForm(repeat ? extractSettings(repeat) : settingsFor(initialBean?.id || '', initialType)));
   const [madeBy, setMadeBy] = useState(getDefaultName());
-  const [selectedDrink, setSelectedDrink] = useState<DrinkLog | null>(null);
-  const recentNames = useMemo(() => getRecentNames(), []);
+  const [created, setCreated] = useState<DrinkLog>();
+  const [usingRepeat, setUsingRepeat] = useState(!!repeat);
+  const { busy, run } = useAction();
   const toast = useToast();
-
-  const beanById = useMemo(() => new Map(beans.map((bean) => [bean.id, bean])), [beans]);
-  const bean = beanById.get(beanId);
-
-  const getBeanLabel = (b: Bean) => (b.roaster ? `${b.roaster} — ${b.name}` : b.name);
-
-  useEffect(() => {
-    const load = async () => {
-      const [beansRes, drinksRes] = await Promise.all([
-        apiGet<Bean[]>('/api/beans'),
-        apiGet<DrinkLog[]>('/api/drinks')
-      ]);
-      setBeans(beansRes);
-      setDrinks(drinksRes);
-      if (beansRes[0]) setBeanId(beansRes[0].id);
-    };
-    load();
-  }, []);
-
-  // Prefill settings when the bean or drink type changes: saved recipe first,
-  // then the last matching drink, then defaults. Ratings reset for a fresh log.
-  useEffect(() => {
-    if (!beanId) return;
-    const recipe = recipeForType(beanById.get(beanId), drinkType);
-    const lastDrink = drinks.find((d) => d.bean_id === beanId && d.drink_type === drinkType);
-    const base = recipe ?? (lastDrink ? extractSettings(lastDrink) : DEFAULT_SETTINGS);
-    setForm({ ...defaultDrink, ...base });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [beanId, drinkType]);
-
-  const currentSettings = (): RecipeSettings => extractSettings(form as unknown as RecipeSettings);
-  const hasRecipe = !!recipeForType(bean, drinkType);
-
-  const handleSubmit = async () => {
-    if (!beanId) {
-      toast('Add a bean first', 'error');
-      return;
-    }
-    const payload = {
-      bean_id: beanId,
-      drink_type: drinkType,
-      custom_label: form.custom_label,
-      made_by: madeBy,
-      rated_by: madeBy,
-      temperature_level: form.temperature_level,
-      body_level: form.body_level,
-      order: form.order,
-      coffee_volume_ml: form.coffee_volume_ml,
-      milk_volume_ml: form.milk_volume_ml,
-      strength_level: form.strength_level,
-      grind_setting: form.grind_setting,
-      overall_rating: form.overall_rating,
-      sweetness: form.sweetness,
-      bitterness: form.bitterness,
-      acidity: form.acidity,
-      body_mouthfeel: form.body_mouthfeel,
-      balance: form.balance,
-      would_make_again: form.would_make_again,
-      dialed_in: form.dialed_in,
-      notes: form.notes
-    };
-    const created = await apiSend<DrinkLog>('/api/drinks', 'POST', payload);
-    setDrinks((prev) => [created, ...prev]);
-    addRecentName(madeBy);
-    toast('Drink logged', 'success');
-  };
-
-  const handleSaveRecipe = async () => {
-    if (!beanId) return;
-    const recipe = await upsertRecipe(beanId, drinkType, currentSettings());
-    setBeans((prev) =>
-      prev.map((b) =>
-        b.id === beanId
-          ? { ...b, recipes: [...(b.recipes ?? []).filter((r) => r.drink_type !== drinkType), recipe] }
-          : b
-      )
-    );
-    toast(`Saved best ${drinkType} recipe`, 'success');
-  };
-
-  const topDrinks = drinks.filter((d) => d.overall_rating >= 4).slice(0, 5);
-
-  return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Log a drink</h1>
-        <p className="text-sm text-muted">Pick a bean and dial type — your saved recipe loads automatically.</p>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-        <section className="card flex flex-col gap-5 p-5">
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5">
-              <span className="field-label">Bean</span>
-              <select className="input" value={beanId} onChange={(e) => setBeanId(e.target.value)}>
-                {beans.length === 0 && <option value="">No beans yet</option>}
-                {beans.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {getBeanLabel(b)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="field-label">Made by</span>
-              <input className="input" list="names" value={madeBy} onChange={(e) => setMadeBy(e.target.value)} />
-              <datalist id="names">
-                {recentNames.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-            </label>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="field-label">Drink type</span>
-            <ChipSelect ariaLabel="Drink type" options={DRINK_TYPES} value={drinkType} onChange={setDrinkType} />
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="section-title">Recipe</span>
-              <span className="text-xs text-muted">
-                {hasRecipe ? 'Loaded from saved recipe' : 'Using last brew / defaults'}
-              </span>
-            </div>
-            <RecipeControls value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} unit={unit} />
-            <button type="button" className="btn self-start" onClick={handleSaveRecipe} disabled={!beanId}>
-              <BookmarkPlus size={17} />
-              Save as best {drinkType} recipe
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-3 border-t border-border pt-4">
-            <span className="section-title">Rating</span>
-            <RatingPanel value={form} onChange={(patch) => setForm((f) => ({ ...f, ...patch }))} />
-          </div>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="field-label">Notes</span>
-            <textarea
-              className="input"
-              placeholder="Tasting notes, tweaks for next time…"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-            />
-          </label>
-
-          <button className="btn btn-primary" onClick={handleSubmit}>
-            <Sparkles size={18} />
-            Log drink
-          </button>
-        </section>
-
-        <aside className="flex flex-col gap-5">
-          <section className="card p-5">
-            <h3 className="section-title mb-3">Recent drinks</h3>
-            <div className="flex flex-col gap-2">
-              {drinks.length === 0 && <p className="text-sm text-muted">No drinks logged yet.</p>}
-              {drinks.slice(0, 5).map((drink) => (
-                <button
-                  key={drink.id}
-                  type="button"
-                  className="card-muted flex items-start justify-between gap-3 p-3 text-left transition-transform hover:-translate-y-0.5"
-                  onClick={() => setSelectedDrink(drink)}
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-semibold">{drink.drink_type}</div>
-                    <div className="truncate text-xs text-muted">
-                      {beanById.get(drink.bean_id) ? getBeanLabel(beanById.get(drink.bean_id) as Bean) : 'Unknown bean'}
-                    </div>
-                    <div className="mt-0.5 text-xs text-muted">
-                      {formatVolume(drink.coffee_volume_ml, unit)} · {STRENGTH_LABEL[drink.strength_level]} · G{drink.grind_setting}
-                    </div>
-                  </div>
-                  <span className="badge badge-gold">★ {drink.overall_rating}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="card p-5">
-            <h3 className="section-title mb-3 flex items-center gap-2">
-              <Trophy size={18} className="text-gold" /> Hall of fame
-            </h3>
-            <div className="flex flex-col gap-2">
-              {topDrinks.length === 0 && <p className="text-sm text-muted">Rate a drink 4★+ to see it here.</p>}
-              {topDrinks.map((drink) => (
-                <div key={drink.id} className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{drink.drink_type}</div>
-                    <div className="truncate text-xs text-muted">{drink.notes || 'No notes'}</div>
-                  </div>
-                  <span className="badge badge-gold">★ {drink.overall_rating}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        </aside>
-      </div>
-
-      <Dialog open={!!selectedDrink} onOpenChange={(open) => !open && setSelectedDrink(null)}>
-        {selectedDrink && (
-          <DialogContent>
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <DialogTitle className="text-lg font-bold">{selectedDrink.drink_type}</DialogTitle>
-                <div className="text-sm text-muted">
-                  {beanById.get(selectedDrink.bean_id)
-                    ? getBeanLabel(beanById.get(selectedDrink.bean_id) as Bean)
-                    : 'Unknown bean'}
-                </div>
-              </div>
-              <DialogClose asChild>
-                <button className="btn btn-ghost !min-h-0 px-3 py-1.5">Close</button>
-              </DialogClose>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                ['Coffee', formatVolume(selectedDrink.coffee_volume_ml, unit)],
-                ['Milk', formatVolume(selectedDrink.milk_volume_ml, unit)],
-                ['Strength', STRENGTH_LABEL[selectedDrink.strength_level]],
-                ['Temperature', selectedDrink.temperature_level],
-                ['Body', BODY_LABEL[selectedDrink.body_level]],
-                ['Order', selectedDrink.order.replace('_', ' ')],
-                ['Grind', String(selectedDrink.grind_setting)],
-                ['Rating', `${selectedDrink.overall_rating}/5`]
-              ].map(([label, val]) => (
-                <div key={label} className="card-muted px-3 py-2">
-                  <div className="field-label">{label}</div>
-                  <div className="font-semibold">{val}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3">
-              <div className="field-label">Notes</div>
-              <p className="text-sm">{selectedDrink.notes || 'No notes yet.'}</p>
-            </div>
-          </DialogContent>
-        )}
-      </Dialog>
+  const bean = beans.find(b => b.id === beanId);
+  const activeBeans = beans.filter(b => !b.archived || b.id === beanId);
+  const choose = (id: string, type: string) => { setBeanId(id); setDrinkType(type); setForm(freshForm(settingsFor(id, type))); setUsingRepeat(false); setCreated(undefined); };
+  const save = () => run(async () => {
+    if (!beanId) throw new Error('Choose a bean first.');
+    const saved = await apiSend<DrinkLog>('/api/drinks', 'POST', { ...form, bean_id: beanId, drink_type: drinkType, made_by: madeBy, rated_by: madeBy });
+    setDrinks(prev => [saved, ...prev]); setCreated(saved); addRecentName(madeBy);
+    setForm(freshForm(extractSettings(form))); setUsingRepeat(false);
+    toast('A good cup, remembered. Drink logged.', 'success');
+  });
+  const saveRecipe = () => run(async () => {
+    const recipe = await upsertRecipe(beanId, drinkType, extractSettings(form));
+    setBeans(prev => prev.map(b => b.id === beanId ? { ...b, recipes: [...(b.recipes ?? []).filter(r => r.drink_type !== drinkType), recipe] } : b));
+    toast(`${drinkType} recipe saved for ${bean?.name}`, 'success');
+  });
+  const best = [...drinks].filter(d => d.overall_rating >= 4).sort((a, b) => b.overall_rating - a.overall_rating || b.created_at.localeCompare(a.created_at)).slice(0, 2);
+  return <>
+    {repeatId && !repeat && <p role="alert" className="card p-4 text-sm">That brew couldn’t be found. Choose your bean and recipe below.</p>}
+    {created && <section className="card success-panel p-5" role="status"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="flex items-center gap-2 font-bold"><Check size={18} /> {created.drink_type} logged</h2><p className="mt-1 text-sm text-muted">Add a photo, or open the brew to review your notes.</p></div><Link className="btn" to={`/drinks/${created.id}`}>View saved brew <ArrowUpRight size={16} /></Link></div><div className="mt-3"><PhotoPicker onSave={async file => { const updated = await uploadFile<DrinkLog>(`/api/drinks/${created.id}/photo`, file); setCreated(updated); setDrinks(prev => prev.map(d => d.id === updated.id ? updated : d)); toast('Photo saved', 'success'); }} /></div></section>}
+    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <section className="card flex flex-col gap-6 p-5 sm:p-6">
+        <div><p className="eyebrow">Let’s brew</p><h2 className="text-2xl font-bold">What’s in your cup?</h2></div>
+        {!activeBeans.length && <p className="text-sm text-muted">All your beans are archived. <Link to="/beans" className="text-accent underline">Unarchive a bean</Link> or add a new coffee to start brewing.</p>}
+        <div className="grid gap-4 sm:grid-cols-2"><label className="flex flex-col gap-1.5"><span className="field-label">Coffee bean</span><select className="input" value={beanId} onChange={e => choose(e.target.value, drinkType)}>{!beanId && <option value="">Choose a bean</option>}{activeBeans.map(b => <option key={b.id} value={b.id}>{beanLabel(b)}{b.archived ? ' (archived)' : ''}</option>)}</select></label><label className="flex flex-col gap-1.5"><span className="field-label">Made by</span><input className="input" list="recent-makers" placeholder="Your name" value={madeBy} onChange={e => setMadeBy(e.target.value)} /><datalist id="recent-makers">{getRecentNames().map(name => <option key={name}>{name}</option>)}</datalist></label></div>
+        {bean && <Link className="-mt-3 text-xs font-semibold text-accent" to={`/beans/${bean.id}`}>View {bean.name}’s brews & recipes →</Link>}
+        <div className="flex flex-col gap-2"><span className="field-label">Drink type</span><ChipSelect ariaLabel="Drink type" options={DRINK_TYPES} value={drinkType} onChange={type => choose(beanId, type)} /></div>
+        <div className="flex flex-col gap-4 border-t border-border pt-5"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="section-title">01 / Your recipe</h3><span className="badge">{usingRepeat ? 'Copied from your brew' : recipeForType(bean, drinkType) ? 'Saved bean recipe' : drinks.some(d => d.bean_id === beanId && d.drink_type === drinkType) ? 'Last brew settings' : 'Starting settings'}</span></div><RecipeControls value={form} onChange={patch => setForm(f => ({ ...f, ...patch }))} unit={unit} /><button className="btn self-start text-xs" disabled={!beanId || busy} onClick={saveRecipe}><BookmarkPlus size={16} /> Save as bean recipe</button></div>
+        <div className="flex flex-col gap-4 border-t border-border pt-5"><h3 className="section-title">02 / How did it taste?</h3><RatingPanel value={form} onChange={patch => setForm(f => ({ ...f, ...patch }))} /><label className="flex flex-col gap-1.5"><span className="field-label">Tasting notes</span><textarea className="input" placeholder="Chocolate finish? A little too bitter? What would you try next?" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></label></div>
+        <button className="btn btn-primary w-full" disabled={!beanId || busy} onClick={save}><Sparkles size={18} />{busy ? 'Saving…' : 'Log this cup'}</button>
+      </section>
+      <aside className="flex min-w-0 flex-col gap-6"><section><div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-bold">Fresh from your journal</h2><Link className="text-xs font-semibold text-accent" to="/drinks?view=history">View all →</Link></div><div className="flex flex-col gap-3">{drinks.slice(0, 3).map(d => <DrinkCard key={d.id} drink={d} bean={beans.find(b => b.id === d.bean_id)} unit={unit} />)}{!drinks.length && <div className="card empty-state"><Coffee size={28} className="mx-auto text-accent" /><h3>Your first cup belongs here.</h3><p>Log a drink and watch your coffee story grow.</p></div>}</div></section>
+        <section className="card p-5"><h2 className="mb-4 flex items-center gap-2 font-bold"><Trophy size={18} className="text-gold" /> Worth another cup</h2>{best.length ? best.map(d => <Link key={d.id} to={`/?repeat=${d.id}`} className="flex items-center justify-between gap-3 border-t border-border py-3"><div><p className="text-sm font-semibold">{d.drink_type}</p><p className="text-xs text-muted">{beans.find(b => b.id === d.bean_id)?.name}</p></div><span className="rating-badge">★ {d.overall_rating}</span></Link>) : <p className="text-sm text-muted">Your highest rated brews will appear here, ready to make again.</p>}</section>
+      </aside>
     </div>
-  );
+  </>;
 }

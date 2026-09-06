@@ -3,8 +3,8 @@
   "short_name": "BrewNotes",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e1f21",
-  "theme_color": "#1e1f21",
+  "background_color": "#f6f5f0",
+  "theme_color": "#46634d",
   "icons": [
     {
       "src": "/icon.svg",

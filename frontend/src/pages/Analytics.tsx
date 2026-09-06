@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useState, ReactElement } from 'react';
+import { useMemo, ReactElement } from 'react';
 import { LineChart, Line, ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
-import { apiGet } from '../utils/api';
 import { DrinkLog } from '../utils/types';
+import { Link } from 'react-router-dom';
+import { useResource } from '../utils/useResource';
+import { drinkDate } from '../utils/history';
+import LoadState from '../components/LoadState';
 
 const CHART_COLOR = 'var(--accent)';
 
 export default function Analytics() {
-  const [drinks, setDrinks] = useState<DrinkLog[]>([]);
-
-  useEffect(() => {
-    apiGet<DrinkLog[]>('/api/drinks').then(setDrinks);
-  }, []);
+  const logs = useResource<DrinkLog[]>('/api/drinks');
+  const drinks = logs.data ?? [];
 
   const ratingsByDay = useMemo(
     () =>
       Object.values(
         drinks.reduce((acc, drink) => {
-          const day = drink.created_at.split('T')[0];
+          const date = drinkDate(drink.created_at);
+          const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
           if (!acc[day]) acc[day] = { day, ratings: [] as number[] };
           acc[day].ratings.push(drink.overall_rating);
           return acc;
@@ -51,10 +52,13 @@ export default function Analytics() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Stats</h1>
-        <p className="text-sm text-muted">How your brewing is trending across every bean.</p>
+      <div className="page-heading">
+        <div><p className="eyebrow">Small tweaks, better coffee</p><h1>A taste for progress.</h1>
+        <p>See what’s working across your brewing journal.</p></div><a className="btn" href="/api/export.zip">Download backup ↗</a>
       </div>
+
+      <LoadState loading={logs.loading} error={logs.error} retry={logs.retry} />
+      {!logs.loading && !logs.error && !drinks.length && <div className="card empty-state"><h2>Your coffee story is just beginning.</h2><p>Log a few cups to discover patterns in your brewing.</p><Link className="btn btn-primary" to="/">Log a drink</Link></div>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Drinks logged" value={String(drinks.length)} />
@@ -63,7 +67,7 @@ export default function Analytics() {
         <Stat label="Make again" value={String(makeAgain)} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {drinks.length > 0 && <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard title="Average rating over time">
           <LineChart data={ratingsByDay}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -82,7 +86,7 @@ export default function Analytics() {
             <Bar dataKey="total" fill={CHART_COLOR} radius={[6, 6, 0, 0]} />
           </BarChart>
         </ChartCard>
-      </div>
+      </div>}
     </div>
   );
 }

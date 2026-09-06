@@ -23,10 +23,18 @@ class BeanBase(BaseModel):
 
 
 class BeanCreate(BeanBase):
-    pass
+    name: str = Field(min_length=1, max_length=200)
+    bag_size_g: int | None = Field(default=None, ge=0)
+    price: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    rating: int | None = Field(default=None, ge=1, le=5)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def trim_name(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
-class BeanUpdate(BeanBase):
+class BeanUpdate(BeanCreate):
     image_path: str | None = None
     thumbnail_path: str | None = None
 
@@ -118,10 +126,18 @@ class DrinkLogBase(BaseModel):
 
 
 class DrinkLogCreate(DrinkLogBase):
-    pass
+    coffee_volume_ml: float = Field(ge=0, allow_inf_nan=False)
+    milk_volume_ml: float = Field(ge=0, allow_inf_nan=False)
+    grind_setting: int = Field(ge=1, le=7)
+    overall_rating: int = Field(ge=1, le=5)
+    sweetness: int = Field(ge=1, le=5)
+    bitterness: int = Field(ge=1, le=5)
+    acidity: int = Field(ge=1, le=5)
+    body_mouthfeel: int = Field(ge=1, le=5)
+    balance: int = Field(ge=1, le=5)
 
 
-class DrinkLogUpdate(DrinkLogBase):
+class DrinkLogUpdate(DrinkLogCreate):
     photo_path: str | None = None
     thumbnail_path: str | None = None
 

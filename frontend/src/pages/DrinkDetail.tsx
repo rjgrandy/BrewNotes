@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Trash2, BookmarkPlus, Upload } from 'lucide-react';
-import { apiGet, apiSend, uploadFile } from '../utils/api';
+import { ArrowLeft, Trash2, BookmarkPlus } from 'lucide-react';
+import { apiSend, uploadFile } from '../utils/api';
 import { upsertRecipe } from '../utils/beanApi';
 import { Bean, DrinkLog, RecipeSettings } from '../utils/types';
 import { DRINK_TYPES } from '../utils/constants';
 import { mediaUrl } from '../utils/media';
+import { beanLabel, drinkDate } from '../utils/history';
+import { useAction, useResource } from '../utils/useResource';
+import PhotoPicker from '../components/PhotoPicker';
+import LoadState from '../components/LoadState';
 import ChipSelect from '../components/ChipSelect';
 import RecipeControls from '../components/RecipeControls';
 import RatingPanel from '../components/RatingPanel';
@@ -29,20 +33,25 @@ export default function DrinkDetail({ unit }: { unit: string }) {
   const [beans, setBeans] = useState<Bean[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const toast = useToast();
+  const { busy, run } = useAction();
+  const log = useResource<DrinkLog>(`/api/drinks/${drinkId}`);
+  const coffees = useResource<Bean[]>('/api/beans?include_archived=true');
+  const [saved, setSaved] = useState<DrinkLog | null>(null);
 
   useEffect(() => {
-    if (!drinkId) return;
-    apiGet<DrinkLog>(`/api/drinks/${drinkId}`).then(setDrink);
-    apiGet<Bean[]>('/api/beans?include_archived=true').then(setBeans);
-  }, [drinkId]);
+    setDrink(log.data ?? null); setSaved(log.data ?? null);
+  }, [log.data]);
+  useEffect(() => { setBeans(coffees.data ?? []); }, [coffees.data]);
 
-  if (!drink) return <div className="card p-6 text-muted">Loading…</div>;
+  if (!drink) return <LoadState loading={log.loading} error={log.error} retry={log.retry} />;
+  const dirty = JSON.stringify(drink) !== JSON.stringify(saved);
 
   const patch = (next: Partial<DrinkLog>) => setDrink((d) => (d ? { ...d, ...next } : d));
 
   const handleSave = async () => {
     const updated = await apiSend<DrinkLog>(`/api/drinks/${drinkId}`, 'PUT', drink);
     setDrink(updated);
+    setSaved(updated);
     toast('Changes saved', 'success');
   };
 
@@ -53,7 +62,10 @@ export default function DrinkDetail({ unit }: { unit: string }) {
 
   const handleUpload = async (file?: File) => {
     if (!file || !drinkId) return;
-    setDrink(await uploadFile<DrinkLog>(`/api/drinks/${drinkId}/photo`, file));
+    const updated = await uploadFile<DrinkLog>(`/api/drinks/${drinkId}/photo`, file);
+    const photoFields = { photo_path: updated.photo_path, thumbnail_path: updated.thumbnail_path };
+    patch(photoFields);
+    setSaved(prev => prev ? { ...prev, ...photoFields } : prev);
     toast('Photo added', 'success');
   };
 
@@ -66,24 +78,28 @@ export default function DrinkDetail({ unit }: { unit: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <Link to="/drinks" className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-text">
+      <Link to="/drinks?view=history" className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-text">
         <ArrowLeft size={16} /> All drinks
       </Link>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{drink.drink_type}</h1>
-          <p className="text-sm text-muted">{new Date(drink.created_at).toLocaleString()}</p>
+          <p className="eyebrow">Brew details</p>
+          <h1 className="text-3xl font-bold tracking-tight">{drink.custom_label || drink.drink_type}</h1>
+          <p className="text-sm text-muted">{drinkDate(drink.created_at).toLocaleString()}</p>
         </div>
         <div className="flex gap-2">
           <button className="btn btn-danger" onClick={() => setConfirmOpen(true)}>
             <Trash2 size={16} /> Delete
           </button>
-          <button className="btn btn-primary" onClick={handleSave}>
-            Save changes
+          <button className="btn btn-primary" disabled={busy || !dirty} onClick={() => run(handleSave)}>
+            {busy ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
           </button>
         </div>
       </div>
+
+      <LoadState error={coffees.error} retry={coffees.retry} />
+      <div className="journal-hero flex flex-wrap items-center justify-between gap-4"><div><p className="eyebrow">The bean behind this cup</p><Link className="text-lg font-bold hover:text-accent" to={`/beans/${drink.bean_id}`}>{beanLabel(beans.find(b => b.id === drink.bean_id))} →</Link><p className="mt-1 text-sm text-muted">Open the bean to see its recipes and every brew.</p></div><div className="flex flex-wrap gap-2"><Link className="btn" to={`/drinks/type/${encodeURIComponent(drink.drink_type)}`}>Compare beans for {drink.drink_type}</Link><Link className="btn btn-primary" to={`/?repeat=${drink.id}`}>Brew again</Link></div></div>
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <section className="card flex flex-col gap-5 p-5">
@@ -104,6 +120,8 @@ export default function DrinkDetail({ unit }: { unit: string }) {
             </label>
           </div>
 
+          <label className="flex flex-col gap-1.5"><span className="field-label">Drink name (optional)</span><input className="input" placeholder="e.g. Sunday morning cortado" value={drink.custom_label || ''} onChange={e => patch({ custom_label: e.target.value })} /></label>
+
           <div className="flex flex-col gap-1.5">
             <span className="field-label">Drink type</span>
             <ChipSelect
@@ -117,7 +135,7 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="section-title">Recipe</span>
-              <button className="btn !min-h-0 px-3 py-1.5 text-xs" onClick={promoteToRecipe}>
+              <button className="btn !min-h-0 px-3 py-1.5 text-xs" disabled={busy} onClick={() => run(promoteToRecipe)}>
                 <BookmarkPlus size={15} /> Save as bean recipe
               </button>
             </div>
@@ -127,6 +145,7 @@ export default function DrinkDetail({ unit }: { unit: string }) {
           <div className="flex flex-col gap-3 border-t border-border pt-4">
             <span className="section-title">Rating</span>
             <RatingPanel value={drink} onChange={patch} />
+            <label className="flex flex-col gap-1.5"><span className="field-label">Rated by</span><input className="input" value={drink.rated_by || ''} onChange={e => patch({ rated_by: e.target.value })} /></label>
           </div>
 
           <label className="flex flex-col gap-1.5">
@@ -144,16 +163,8 @@ export default function DrinkDetail({ unit }: { unit: string }) {
               <div className="grid h-full w-full place-items-center text-muted">No photo yet</div>
             )}
           </div>
-          <label className="btn cursor-pointer justify-center">
-            <Upload size={16} /> {photo ? 'Replace photo' : 'Add photo'}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => handleUpload(e.target.files?.[0])}
-            />
-          </label>
+          <PhotoPicker currentPhoto={photo} onSave={handleUpload} />
+          <p className="text-xs text-muted">Crop and rotate before saving. Photo changes save separately from your brew details.</p>
         </aside>
       </div>
 
@@ -165,7 +176,7 @@ export default function DrinkDetail({ unit }: { unit: string }) {
             <DialogClose asChild>
               <button className="btn">Cancel</button>
             </DialogClose>
-            <button className="btn btn-danger" onClick={handleDelete}>
+            <button className="btn btn-danger" disabled={busy} onClick={() => run(handleDelete)}>
               Delete
             </button>
           </div>

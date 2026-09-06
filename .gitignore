@@ -6,3 +6,7 @@ backend/.data/
 *.pyc
 /data/
 *.tsbuildinfo
+.tools/
+frontend/test-results/
+frontend/playwright-report/
+backend/.test-data/

@@ -2,9 +2,13 @@ import csv
 import io
 import json
 import zipfile
+import sqlite3
+import tempfile
+import shutil
+from contextlib import closing
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -12,6 +16,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..deps import get_db
 from ..models import Bean, DrinkLog
+from ..schemas import BeanOut
 
 router = APIRouter(prefix="/api", tags=["export"])
 
@@ -35,14 +40,21 @@ def export_csv(db: Session = Depends(get_db)) -> Response:
 
 
 @router.get("/export.zip")
-def export_zip(db: Session = Depends(get_db)) -> FileResponse:
+def export_zip(background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> FileResponse:
     beans = [bean_to_dict(bean) for bean in db.scalars(select(Bean)).all()]
     drinks = [drink_to_dict(drink) for drink in db.scalars(select(DrinkLog)).all()]
-    export_path = settings.data_dir / "export.zip"
+    # Unique files prevent simultaneous downloads from overwriting one another.
+    temp_dir = Path(tempfile.mkdtemp(prefix="brewnotes-export-"))
+    background_tasks.add_task(shutil.rmtree, temp_dir, ignore_errors=True)
+    export_path = temp_dir / "export.zip"
+    snapshot = temp_dir / "app.db"
+    with closing(sqlite3.connect(settings.db_path)) as source, closing(sqlite3.connect(snapshot)) as target:
+        source.backup(target)
     with zipfile.ZipFile(export_path, "w", compression=zipfile.ZIP_DEFLATED) as zip_file:
         zip_file.writestr("export.json", json.dumps({"beans": beans, "drinks": drinks}, default=str))
         zip_file.writestr("beans.csv", dicts_to_csv(beans))
         zip_file.writestr("drinks.csv", dicts_to_csv(drinks))
+        zip_file.write(snapshot, "app.db")
         uploads_dir = settings.upload_dir
         if uploads_dir.exists():
             for path in uploads_dir.rglob("*"):
@@ -62,27 +74,7 @@ def dicts_to_csv(rows: list[dict]) -> str:
 
 
 def bean_to_dict(bean: Bean) -> dict:
-    return {
-        "id": bean.id,
-        "name": bean.name,
-        "roaster": bean.roaster,
-        "origin": bean.origin,
-        "process": bean.process,
-        "roast_level": bean.roast_level,
-        "tasting_notes": bean.tasting_notes,
-        "roast_date": bean.roast_date,
-        "open_date": bean.open_date,
-        "bag_size_g": bean.bag_size_g,
-        "price": bean.price,
-        "decaf": bean.decaf,
-        "notes": bean.notes,
-        "image_path": bean.image_path,
-        "thumbnail_path": bean.thumbnail_path,
-        "archived": bean.archived,
-        "current_best_settings": bean.current_best_settings,
-        "created_at": bean.created_at,
-        "updated_at": bean.updated_at,
-    }
+    return BeanOut.model_validate(bean).model_dump(mode="json")
 
 
 def drink_to_dict(drink: DrinkLog) -> dict:

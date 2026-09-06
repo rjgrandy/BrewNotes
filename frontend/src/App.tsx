@@ -1,22 +1,24 @@
-import { Routes, Route, NavLink } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { Routes, Route, NavLink, Link, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Coffee, Bean, GlassWater, BarChart3, Sun, Moon } from 'lucide-react';
-import Dashboard from './pages/Dashboard';
-import Beans from './pages/Beans';
-import BeanDetail from './pages/BeanDetail';
-import Drinks from './pages/Drinks';
-import DrinkDetail from './pages/DrinkDetail';
-import Analytics from './pages/Analytics';
+import LoadState from './components/LoadState';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Beans = lazy(() => import('./pages/Beans'));
+const BeanDetail = lazy(() => import('./pages/BeanDetail'));
+const Drinks = lazy(() => import('./pages/Drinks'));
+const DrinkDetail = lazy(() => import('./pages/DrinkDetail'));
+const DrinkTypeDetail = lazy(() => import('./pages/DrinkTypeDetail'));
+const Analytics = lazy(() => import('./pages/Analytics'));
 import { ToastProvider } from './components/ui/Toast';
 import { cn } from './components/ui/cn';
 
 const getStored = (key: string, fallback: string) => window.localStorage.getItem(key) || fallback;
 
 const NAV = [
-  { to: '/', label: 'Log', icon: Coffee, end: true },
+  { to: '/', label: 'Brew', icon: Coffee, end: true },
   { to: '/beans', label: 'Beans', icon: Bean, end: false },
   { to: '/drinks', label: 'Drinks', icon: GlassWater, end: false },
-  { to: '/analytics', label: 'Stats', icon: BarChart3, end: false }
+  { to: '/analytics', label: 'Insights', icon: BarChart3, end: false }
 ];
 
 function Brand() {
@@ -32,7 +34,7 @@ function Brand() {
         <div className="text-lg font-extrabold tracking-tight">
           Brew<span className="text-accent">Notes</span>
         </div>
-        <div className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">KF7 dial-in journal</div>
+        <div className="text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-muted">Your coffee journal</div>
       </div>
     </div>
   );
@@ -40,7 +42,10 @@ function Brand() {
 
 export default function App() {
   const [theme, setTheme] = useState(getStored('theme', 'light'));
-  const unit = 'oz';
+  const [unit, setUnit] = useState(getStored('unit', 'oz'));
+  const location = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
+  useEffect(() => { window.localStorage.setItem('unit', unit); }, [unit]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -62,6 +67,7 @@ export default function App() {
 
   return (
     <ToastProvider>
+      <a href="#main-content" className="skip-link">Skip to content</a>
       <div className="flex min-h-screen flex-col md:flex-row">
         {/* Desktop sidebar */}
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface px-4 py-6 md:flex">
@@ -84,7 +90,9 @@ export default function App() {
               </NavLink>
             ))}
           </nav>
-          <div className="mt-auto flex items-center justify-between border-t border-border pt-4">
+          <div className="mt-auto rounded-2xl bg-surface-muted p-4"><p className="eyebrow">Made for your KF7</p><p className="mt-2 text-sm text-muted">A few notes today. A better coffee tomorrow.</p><a className="mt-4 inline-block text-xs font-semibold text-accent" href="/api/export.zip">Download backup ↗</a></div>
+          <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+            <select aria-label="Volume units" className="input !w-auto" value={unit} onChange={e => setUnit(e.target.value)}><option value="oz">oz</option><option value="ml">ml</option></select>
             <span className="text-xs text-muted">Theme</span>
             <ThemeButton />
           </div>
@@ -94,18 +102,20 @@ export default function App() {
           {/* Mobile top bar */}
           <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
             <Brand />
-            <ThemeButton />
+            <div className="flex items-center gap-1"><select aria-label="Volume units" className="input !w-auto !px-2" value={unit} onChange={e => setUnit(e.target.value)}><option value="oz">oz</option><option value="ml">ml</option></select><ThemeButton /></div>
           </header>
 
-          <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-12 md:pt-8">
-            <Routes>
+          <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-12 md:pt-8">
+            <Suspense fallback={<LoadState loading />}><Routes>
               <Route path="/" element={<Dashboard unit={unit} />} />
               <Route path="/beans" element={<Beans unit={unit} />} />
-              <Route path="/beans/:beanId" element={<BeanDetail unit={unit} />} />
+              <Route path="/beans/:beanId" element={<BeanDetail key={location.pathname} unit={unit} />} />
               <Route path="/drinks" element={<Drinks unit={unit} />} />
-              <Route path="/drinks/:drinkId" element={<DrinkDetail unit={unit} />} />
+              <Route path="/drinks/type/:drinkType" element={<DrinkTypeDetail unit={unit} />} />
+              <Route path="/drinks/:drinkId" element={<DrinkDetail key={location.pathname} unit={unit} />} />
               <Route path="/analytics" element={<Analytics />} />
-            </Routes>
+              <Route path="*" element={<div className="card empty-state"><h1>That page isn’t in your journal.</h1><p>Head back to your coffee collection.</p><Link className="btn btn-primary" to="/beans">Explore beans</Link></div>} />
+            </Routes></Suspense>
           </main>
         </div>
 
@@ -125,7 +135,7 @@ export default function App() {
             >
               {({ isActive }) => (
                 <>
-                  <Icon size={22} fill={isActive ? 'currentColor' : 'none'} strokeWidth={isActive ? 0 : 1.9} />
+                  <Icon size={22} strokeWidth={isActive ? 2.5 : 1.9} />
                   {label}
                 </>
               )}
