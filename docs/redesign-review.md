@@ -7,7 +7,7 @@ The app now centers on the relationship between a coffee, the drinks brewed with
 - **Beans → bean → Brews:** the default bean view shows its history, with search, drink type, rating, make-again filtering, and newest/oldest/rating/grind sorting. Filters survive refresh and browser navigation.
 - **Drinks → drink type:** compare every bean used for that drink, including archived beans. Sort by average rating, brew count, recency, or name. Open the bean's matching brews or start another cup with that pairing.
 - **Individual brew:** open its bean, compare beans for its drink type, edit the log, promote its settings to a bean recipe, or brew it again.
-- **Photos:** Camera and Add photo both open the same editor. Choose original/square/landscape/portrait/wide crops; rotate either direction; zoom and drag, or use keyboard-accessible position sliders. Cancel leaves the saved image unchanged. Errors retain the edit for retry. Existing bean photos retain their ID, order, and cover selection when edited.
+- **Photos:** Camera and Add photo both open the same editor. Start with a freely resizable crop, or choose original/square/landscape/portrait/wide presets; rotate either direction; zoom and drag, or use keyboard-accessible position sliders. Cancel leaves the saved image unchanged. Errors retain the edit for retry. Existing bean photos retain their ID, order, and cover selection when edited.
 - **Logging:** saved bean recipes take priority over the last matching brew and defaults. Brew again explicitly copies the selected log's settings. Notes and ratings reset after a successful save. A confirmation links to the saved brew and lets you add a photo.
 
 ## Review fixes

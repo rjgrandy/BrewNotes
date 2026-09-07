@@ -9,6 +9,7 @@ import { useAction, useResource } from '../utils/useResource';
 import LoadState from '../components/LoadState';
 import { mediaUrl } from '../utils/media';
 import { recipeSummaryText } from '../components/RecipeSummary';
+import PhotoFrame from '../components/PhotoFrame';
 import StarsDisplay from '../components/StarsDisplay';
 import { useToast } from '../components/ui/Toast';
 import { Dialog, DialogContent, DialogTitle, DialogClose } from '../components/ui/Dialog';
@@ -127,7 +128,7 @@ export default function Beans({ unit }: Props) {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((bean) => {
-            const cover = mediaUrl(bean.thumbnail_path) || mediaUrl(bean.image_path);
+            const cover = mediaUrl(bean.image_path) || mediaUrl(bean.thumbnail_path);
             const recipes = bean.recipes ?? [];
             const espresso = recipeForType(bean, 'Espresso');
             const brews = (logs.data ?? []).filter(d => d.bean_id === bean.id);
@@ -137,19 +138,7 @@ export default function Beans({ unit }: Props) {
                 to={`/beans/${bean.id}`}
                 className="card group flex flex-col overflow-hidden transition-transform hover:-translate-y-1"
               >
-                {cover && (
-                  <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-muted">
-                    <img
-                      src={cover}
-                      alt={bean.name}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
-                    <div className="absolute right-2 top-2 flex gap-1.5">
-                      {bean.decaf && <span className="badge">Decaf</span>}
-                      {bean.archived && <span className="badge">Archived</span>}
-                    </div>
-                  </div>
-                )}
+                <PhotoFrame src={cover} alt={bean.name} className="bean-card-photo" />
                 <div className="flex flex-1 flex-col gap-2 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -159,7 +148,7 @@ export default function Beans({ unit }: Props) {
                       </p>
                       {bean.rating ? <StarsDisplay value={bean.rating} className="mt-1 inline-block" /> : null}
                     </div>
-                    {!cover && (
+                    {(bean.decaf || bean.archived) && (
                       <div className="flex shrink-0 gap-1.5">
                         {bean.decaf && <span className="badge">Decaf</span>}
                         {bean.archived && <span className="badge">Archived</span>}

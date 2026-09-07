@@ -1,4 +1,4 @@
-const CACHE_NAME = 'brewnotes-shell-v2';
+const CACHE_NAME = 'brewnotes-shell-v3-studio';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {

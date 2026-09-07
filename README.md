@@ -10,7 +10,7 @@ BrewNotes is a self-hosted coffee and espresso logging app designed for fast dai
 - **Attribution** for “Made by” and “Rated by” with recent names.
 - **Analytics dashboard** with Recharts graphs.
 - **Photo management** with thumbnails.
-- **Photo editor** for camera and library images: crop, rotate, zoom, and reposition before saving; edit existing bean and drink photos.
+- **Photo editor** for camera and library images: free cropping with draggable edges and corners, fixed presets, rotation, and keyboard controls; edit existing bean and drink photos.
 - **Connected brewing history**: open a bean to search and sort its brews, or open a drink type to compare every bean used.
 - **Brew again** from a saved log, with its settings copied and fresh ratings and notes.
 - **Light/dark themes and oz/ml preferences**, with responsive layouts and keyboard controls.
@@ -19,7 +19,7 @@ BrewNotes is a self-hosted coffee and espresso logging app designed for fast dai
 
 ## Screenshots
 
-See [the redesign review](docs/redesign-review.md) for the changed flows and validation instructions.
+See [the coffee studio review](docs/studio-review.md) for the new theme, whole-photo layouts, free-crop controls, screenshots, and validation instructions. The [journal redesign review](docs/redesign-review.md) documents the existing brewing flows.
 
 [Desktop brewing view](docs/screenshots/brew-desktop.png) · [Mobile bean comparison](docs/screenshots/compare-mobile.png)
 

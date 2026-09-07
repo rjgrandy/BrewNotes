@@ -11,6 +11,7 @@ import { beanLabel } from '../utils/history';
 import ChipSelect from '../components/ChipSelect';
 import RecipeControls from '../components/RecipeControls';
 import RatingPanel from '../components/RatingPanel';
+import DrinkGlyph from '../components/DrinkGlyph';
 import DrinkCard from '../components/DrinkCard';
 import PhotoPicker from '../components/PhotoPicker';
 import LoadState from '../components/LoadState';
@@ -28,7 +29,7 @@ export default function Dashboard({ unit }: { unit: string }) {
   const logs = useResource<DrinkLog[]>('/api/drinks');
   const [params] = useSearchParams();
   return <div className="flex flex-col gap-6">
-    <section className="journal-hero"><p className="eyebrow">Your daily coffee ritual</p><h1 className="hero-title">Make a little time<br />for a <em>better cup.</em></h1><p className="mt-3 max-w-lg text-sm text-muted">Keep what worked. Tweak what didn’t. Your favorite coffee is a few notes away.</p><Coffee className="hero-coffee" aria-hidden="true" /></section>
+    <section className="journal-hero"><p className="eyebrow">Your daily coffee ritual</p><h1 className="hero-title">Make a little time<br />for a <em>better cup.</em></h1><p className="mt-3 max-w-lg text-sm text-muted">Keep what worked. Tweak what didn’t. Your favorite coffee is a few notes away.</p><div className="hero-art" aria-hidden="true"><DrinkGlyph type="Cappuccino" technical /></div></section>
     <LoadState loading={coffees.loading || logs.loading} error={coffees.error} retry={coffees.retry} />
     <LoadState error={logs.error} retry={logs.retry} />
     {coffees.data && !logs.loading && (coffees.data.length ? <BrewForm key={params.toString()} initialBeans={coffees.data} initialDrinks={logs.data ?? []} requestedBean={params.get('bean')} requestedType={params.get('type')} repeatId={params.get('repeat')} unit={unit} /> : <div className="card empty-state"><h2>First, meet your beans.</h2><p>Add the coffee you’re brewing with. We’ll keep its photos, recipes, and every cup together.</p><Link className="btn btn-primary" to="/beans?add=true">Add your first bean</Link></div>)}

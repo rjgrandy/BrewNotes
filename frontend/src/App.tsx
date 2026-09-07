@@ -25,7 +25,7 @@ function Brand() {
   return (
     <div className="flex items-center gap-3">
       <span
-        className="grid h-10 w-10 place-items-center rounded-2xl text-white"
+        className="grid h-10 w-10 place-items-center rounded-2xl text-on-accent"
         style={{ background: 'linear-gradient(135deg, var(--accent-strong), var(--gold))', boxShadow: 'var(--shadow-soft)' }}
       >
         <Coffee size={20} strokeWidth={2.2} />
@@ -49,6 +49,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#181c1e' : '#92502f');
     window.localStorage.setItem('theme', theme);
   }, [theme]);
 
@@ -81,7 +82,7 @@ export default function App() {
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
-                    isActive ? 'bg-accent text-white' : 'text-muted hover:bg-surface-muted hover:text-text'
+                    isActive ? 'bg-accent text-on-accent' : 'text-muted hover:bg-surface-muted hover:text-text'
                   )
                 }
               >

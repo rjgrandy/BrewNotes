@@ -8,6 +8,8 @@ import { DRINK_TYPES } from '../utils/constants';
 import { mediaUrl } from '../utils/media';
 import { beanLabel, drinkDate } from '../utils/history';
 import { useAction, useResource } from '../utils/useResource';
+import PhotoFrame from '../components/PhotoFrame';
+import DrinkGlyph from '../components/DrinkGlyph';
 import PhotoPicker from '../components/PhotoPicker';
 import LoadState from '../components/LoadState';
 import ChipSelect from '../components/ChipSelect';
@@ -156,13 +158,7 @@ export default function DrinkDetail({ unit }: { unit: string }) {
 
         <aside className="card flex h-fit flex-col gap-3 p-5">
           <h3 className="section-title">Photo</h3>
-          <div className="aspect-square w-full overflow-hidden rounded-xl bg-surface-muted">
-            {photo ? (
-              <img src={photo} alt={drink.drink_type} className="h-full w-full object-cover" />
-            ) : (
-              <div className="grid h-full w-full place-items-center text-muted">No photo yet</div>
-            )}
-          </div>
+          <PhotoFrame src={photo} alt={drink.drink_type} className="aspect-square w-full rounded-xl" placeholder={<DrinkGlyph type={drink.drink_type} technical className="h-48 w-48" />} />
           <PhotoPicker currentPhoto={photo} onSave={handleUpload} />
           <p className="text-xs text-muted">Crop and rotate before saving. Photo changes save separately from your brew details.</p>
         </aside>

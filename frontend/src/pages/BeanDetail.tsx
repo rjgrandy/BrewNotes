@@ -21,6 +21,7 @@ import { replaceBeanPhoto } from '../utils/beanApi';
 import { useResource, useAction } from '../utils/useResource';
 import { averageRating } from '../utils/history';
 import DrinkHistory from '../components/DrinkHistory';
+import PhotoFrame from '../components/PhotoFrame';
 import PhotoPicker from '../components/PhotoPicker';
 import LoadState from '../components/LoadState';
 import { DEFAULT_SETTINGS, DRINK_TYPES } from '../utils/constants';
@@ -106,7 +107,7 @@ export default function BeanDetail({ unit }: Props) {
   if (!bean) return <LoadState loading={!error} error={error} retry={() => { setError(''); loadBean().catch(err => setError(err.message)); }} />;
 
   const photos = bean.photos ?? [];
-  const cover = mediaUrl(bean.image_path);
+  const cover = mediaUrl(bean.image_path) || mediaUrl(bean.thumbnail_path);
   const espresso = recipeForType(bean, 'Espresso');
 
   const saveMeta = async () => {
@@ -138,13 +139,13 @@ export default function BeanDetail({ unit }: Props) {
   const headerInner = (
     <div className="flex flex-wrap items-end justify-between gap-2">
       <div>
-        <h1 className="text-2xl font-bold text-white drop-shadow">{bean.name}</h1>
-        <p className="text-sm text-white/85">
+        <h1 className="bean-title">{bean.name}</h1>
+        <p className="mt-2 text-sm text-muted">
           {[bean.roaster, bean.origin].filter(Boolean).join(' · ') || 'No roaster set'}
         </p>
         <div className="mt-1.5 flex items-center gap-2">
           <StarRating label="Bean rating" size={22} value={bean.rating ?? 0} onChange={rating => run(() => saveRating(rating))} />
-          <span className="text-xs text-white/70">Rate this bean</span>
+          <span className="text-xs text-muted">Rate this bean</span>
         </div>
       </div>
       <div className="flex gap-2">
@@ -222,21 +223,12 @@ export default function BeanDetail({ unit }: Props) {
 
       {/* Header */}
       <section className="card overflow-hidden">
-        {cover ? (
-          <div className="relative aspect-[16/10] min-h-56 w-full bg-surface-muted sm:aspect-[21/9]">
-            <img src={cover} alt={bean.name} className="h-full w-full object-cover" />
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pt-10">
-              {headerInner}
-            </div>
+        <div className="bean-detail-header">
+          <PhotoFrame src={cover} alt={bean.name} className="bean-detail-photo" loading="eager" />
+          <div className="bean-detail-info"><p className="eyebrow mb-3">From the collection</p>{headerInner}
+            {bean.tasting_notes && <p className="mt-5 text-sm text-muted">{bean.tasting_notes}</p>}
           </div>
-        ) : (
-          <div
-            className="p-5"
-            style={{ background: 'linear-gradient(135deg, var(--accent-strong), var(--accent) 65%, var(--gold))' }}
-          >
-            {headerInner}
-          </div>
-        )}
+        </div>
 
         {/* Photo strip */}
         <div className="flex items-center gap-2 overflow-x-auto p-3">
@@ -251,7 +243,7 @@ export default function BeanDetail({ unit }: Props) {
                 bean.image_path === photo.image_path ? 'border-accent' : 'border-border'
               )}
             >
-              <img src={mediaUrl(photo.thumbnail_path)} alt={photo.caption || bean.name} className="h-full w-full object-cover" />
+              <PhotoFrame src={mediaUrl(photo.thumbnail_path)} fallbackSrc={mediaUrl(photo.image_path)} alt={photo.caption || bean.name} className="h-full w-full photo-frame-compact" />
             </button>
           ))}
           <div className="shrink-0"><PhotoPicker onSave={onUpload} /></div>
@@ -447,11 +439,7 @@ export default function BeanDetail({ unit }: Props) {
             return (
               <DialogContent wide>
                 <DialogTitle className="sr-only">Bean photo</DialogTitle>
-                <img
-                  src={mediaUrl(photo.image_path)}
-                  alt={photo.caption ?? bean.name}
-                  className="mx-auto max-h-[78vh] w-auto rounded-xl object-contain"
-                />
+                <PhotoFrame src={mediaUrl(photo.image_path)} alt={photo.caption ?? bean.name} className="lightbox-photo" loading="eager" />
                 <div className="mt-3 flex flex-wrap justify-center gap-2">
                   <PhotoPicker editOnly currentPhoto={mediaUrl(photo.image_path)} onSave={async file => { setBean(await replaceBeanPhoto(bean.id, photo.id, file)); toast('Photo updated', 'success'); }} />
                   {!isCover && (

@@ -1,5 +1,24 @@
 export type Crop = { x: number; y: number; width: number; height: number };
 
+export type CropHandle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+export function constrainCrop(crop: Crop, width: number, height: number): Crop {
+  const w = clamp(crop.width, 1, width), h = clamp(crop.height, 1, height);
+  return { x: clamp(crop.x, 0, width - w), y: clamp(crop.y, 0, height - h), width: w, height: h };
+}
+
+// Work in source pixels; CSS scaling never changes the exported selection.
+export function dragCrop(crop: Crop, handle: CropHandle, dx: number, dy: number, width: number, height: number): Crop {
+  if (handle === 'move') return constrainCrop({ ...crop, x: crop.x + dx, y: crop.y + dy }, width, height);
+  let left = crop.x, top = crop.y, right = left + crop.width, bottom = top + crop.height;
+  if (handle.includes('w')) left = clamp(left + dx, 0, right - 1);
+  if (handle.includes('e')) right = clamp(right + dx, left + 1, width);
+  if (handle.includes('n')) top = clamp(top + dy, 0, bottom - 1);
+  if (handle.includes('s')) bottom = clamp(bottom + dy, top + 1, height);
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
 export function cropBounds(width: number, height: number, aspect: number, zoom: number, x: number, y: number): Crop {
   const cropWidth = Math.min(width, height * aspect) / zoom;
   const cropHeight = cropWidth / aspect;
@@ -10,7 +29,7 @@ export function rotateImage(image: HTMLImageElement, turns: number): HTMLCanvasE
   const canvas = document.createElement('canvas');
   // Bound working memory on large phone photos while retaining ample export resolution.
   const scale = Math.min(1, 3000 / Math.max(image.naturalWidth, image.naturalHeight));
-  const width = Math.round(image.naturalWidth * scale), height = Math.round(image.naturalHeight * scale);
+  const width = Math.max(1, Math.round(image.naturalWidth * scale)), height = Math.max(1, Math.round(image.naturalHeight * scale));
   canvas.width = turns % 2 ? height : width;
   canvas.height = turns % 2 ? width : height;
   const ctx = canvas.getContext('2d');
